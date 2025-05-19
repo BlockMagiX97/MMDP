@@ -84,16 +84,16 @@ struct mmdp_custom_struct {
 	mmdp_struct_flags flags;
 
 	/* this function returns serialized size */
-	uint32_t (*sizeof_func)(void*);
-	/* this function must return 0 on success */
-	/* parameter1 is pointer to struct */
-	/* paramater2 is max size of serealized struct (is at least what sizeof_func returns with the same struct)*/
-	int (*ser_func)(void*, uint32_t);
-	/* this function must return 0 on success */
-	/* parameter1 is destination address */
+	uint32_t (*sizeof_func)(const void*);
+	/* this function must ptr pointing to byte AFTER last byte */
+	/* parameter1 is pointer to dst*/
+	/* parameter2 is pointer to struct */
+	void* (*ser_func)(void*, const void*);
+	/* returns pointer to byte AFTER last byte of serialized struct */
+	/* parameter1 is destination */
 	/* parameter2 is pointer to serealized struct by ser_func */
 	/* paramater3 is a maximum size that deser_func can read */
-	int (*deser_func)(void*, void*, uint32_t);
+	const void* (*deser_func)(void*, const void*, uint32_t);
 };
 
 struct mmdp_capability{
@@ -121,6 +121,7 @@ struct mmdp_clientside_config {
 
 extern struct mmdp_capability mmdp_capability;
 
+
 int generate_capability(uint32_t c_struct_num, struct mmdp_custom_struct* c_structs);
 void* serialize_capability(uint32_t* size_out);
 int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capability* out);
@@ -129,4 +130,30 @@ void* convert_clientside_to_serealized_serverside(const struct mmdp_clientside_c
 int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized_sconfig, uint32_t max_size);
 
 void print_capability(struct mmdp_capability* mmdp_capability);
+
+uint32_t sizeof_ser_struct_server(struct mmdp_serverside_config* config, uint32_t id, const void* src);
+void* ser_struct_server(struct mmdp_serverside_config* config, uint32_t id, void* dest, const void* src);
+const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t id, void* dest, const void* src, uint32_t max_size);
+
+uint32_t sizeof_ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, const void* src);
+void* ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, void* dest, const void* src);
+const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t id, void* dest, const void* src, uint32_t max_size);
+
+
+int send_struct_server(struct mmdp_serverside_config* config, uint32_t id, uint32_t fd, const void* src, void* write_context);
+int recv_struct_server(struct mmdp_serverside_config* config, uint32_t id, uint32_t fd, void* dest, void* read_context);
+void* recv_struct_server_any(struct mmdp_serverside_config* config, uint32_t* out_id, uint32_t fd, void* read_context);
+
+int send_struct_client(struct mmdp_clientside_config* config, uint32_t id, uint32_t fd, const void* src, void* write_context);
+int recv_struct_client(struct mmdp_clientside_config* config, uint32_t id, uint32_t fd, void* dest, void* read_context);
+void* recv_struct_client_any(struct mmdp_clientside_config* config, uint32_t* out_id, uint32_t fd, void* read_context);
+
+
+
+int init_connection_config_server(int fd, struct mmdp_serverside_config* conf_dest, void* write_context, void* read_context);
+int init_connection_config_client(int fd, struct mmdp_clientside_config* conf_dest, void* write_context, void* read_context);
+
+/* is NOT thread-safe */
+int init_mmdp_lib(uint32_t c_struct_num, struct mmdp_custom_struct* c_structs, int is_server);
+
 #endif

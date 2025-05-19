@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS = -O0 --std=c89 -pedantic -r -Wall -Werror -g
 LDFLAGS = 
 
-all: $(BUILD_DIR)/server
+all: $(BUILD_DIR)/server $(BUILD_DIR)/client
 
 mmdp.h: mmdp_config.h mmdp_macro_utils.h mmdp_struct_decl.h
 mmdp.c: mmdp.h string_helper.h

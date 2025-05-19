@@ -5,12 +5,6 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "mmdp_macro_utils.h"
-
-struct cstruct1 {
-	uint16_t x;
-	uint16_t y;
-};
-
 	/* struct_name, is_essential, net_id */
 #define MMDP_STRUCTS(_F) \
 	_F(struct1    , 1           , "struct1") \
