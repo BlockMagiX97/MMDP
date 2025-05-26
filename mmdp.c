@@ -60,6 +60,7 @@ ssize_t mmdp_read(int fd, void *buf, size_t count, void* read_context) {
 		printf("mmdp_read supposed: %lu\n", count);
 		return 0;
 	}
+
 	printf("mmdp_read count: %lu\n", log);
 	printf("mmdp_read supposed: %lu\n", count);
 	return -1;
@@ -1317,6 +1318,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 			}
 			curr_field = curr_struct->fields+i;
 			/* since we sorted mmdp_capability the normal will be first */
+			printf("type: %d (arr=%d)\n", curr_field->type, MMDP_ARRAY);
 			switch (curr_field->type) {
 				case MMDP_NORMAL:
 					if (max_size < curr_field->body.normal.size) {
@@ -1371,6 +1373,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 						return NULL;
 					}
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = array;
+					printf("array: %p\n" , array);
 					for (j=0;j<nmemb_array;j++) {
 						memcpy(array+j*curr_field->body.array.size, ptr, curr_field->body.array.size);
 						swap_bytes_little(array+j*curr_field->body.array.size, curr_field->body.array.size);
@@ -1583,6 +1586,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 			}
 			curr_field = curr_struct->fields+config->field_order[id][i];
 			/* since we sorted mmdp_capability the normal will be first */
+			printf("type: %d (arr=%d)\n", curr_field->type, MMDP_ARRAY);
 			switch (curr_field->type) {
 				case MMDP_NORMAL:
 					if (max_size < curr_field->body.normal.size) {
@@ -1605,7 +1609,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("SOMETHINGS WRONG, I CAN FEEL IT\n");
 						#endif
-						return 0;
+						return NULL;
 					}
 					struc = malloc(struct_size);
 					if (struc == NULL) {
@@ -1637,6 +1641,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						return NULL;
 					}
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = array;
+					printf("array: %p\n" , array);
 					for (j=0;j<nmemb_array;j++) {
 						memcpy(array+j*curr_field->body.array.size, ptr, curr_field->body.array.size);
 						swap_bytes_little(array+j*curr_field->body.array.size, curr_field->body.array.size);
@@ -1652,7 +1657,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("SOMETHINGS WRONG, I CAN FEEL IT\n");
 						#endif
-						return 0;
+						return NULL;
 					}
 					nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.struct_array.depends_id].offset));
 					array = malloc(nmemb_array*struct_size);
