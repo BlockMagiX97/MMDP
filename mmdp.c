@@ -1240,6 +1240,10 @@ void* ser_struct_server(struct mmdp_serverside_config* config, uint32_t id, void
 					ptr += curr_field->body.normal.size;
 					break;
 				case MMDP_STRUCT:
+					if (*((void**)(((uint8_t*)src)+curr_field->offset)) == NULL) {
+						printf("MMDP: field of type MMDP_STRUCT must not be NULL\n");
+						return NULL;
+					}
 					ptr = ser_struct_server(config, curr_field->body.struc.id, ptr, *((void**)(((uint8_t*)src)+curr_field->offset)));
 					if (ptr == NULL) {
 						#ifdef DEBUG
@@ -1249,6 +1253,13 @@ void* ser_struct_server(struct mmdp_serverside_config* config, uint32_t id, void
 					}
 					break;
 				case MMDP_ARRAY:
+					if (*((uint32_t*)(((uint8_t*)src)+curr_struct->fields[curr_field->body.array.depends_id].offset)) == 0) {
+						break;
+					}
+					if (*((uint8_t**)(((uint8_t*)src)+curr_field->offset)) == NULL) {
+						printf("MMDP: field of type MMDP_ARRAY is NULL, but DEPENDS_ON is not zero\n");
+						return NULL;
+					}
 					for (j=0;j<(*((uint32_t*)(((uint8_t*)src)+curr_struct->fields[curr_field->body.array.depends_id].offset)));j++) {
 						memcpy(ptr, (*((uint8_t**)(((uint8_t*)src)+curr_field->offset)))+j*curr_field->body.array.size, curr_field->body.array.size);
 						swap_bytes_little(ptr, curr_field->body.array.size);
@@ -1267,8 +1278,15 @@ void* ser_struct_server(struct mmdp_serverside_config* config, uint32_t id, void
 						#endif
 						return 0;
 					}
-					printf("struct_size: %u\n", struct_size);
+					if (*((uint32_t*)(((uint8_t*)src)+(curr_struct->fields[curr_field->body.struct_array.depends_id].offset))) == 0) {
+						break;
+					}
+					if (*((uint8_t**)(((uint8_t*)src)+curr_field->offset)) == NULL) {
+						printf("MMDP: field of type MMDP_STRUCT_ARRAY is NULL, but DEPENDS_ON is not zero\n");
+						return NULL;
+					}
 					for (j=0;j<*((uint32_t*)(((uint8_t*)src)+(curr_struct->fields[curr_field->body.struct_array.depends_id].offset)));j++) {
+
 						ptr = ser_struct_server(config, curr_field->body.struct_array.id, ptr, (*((uint8_t**)(((uint8_t*)src)+curr_field->offset)))+j*struct_size);
 						if (ptr == NULL) {
 							#ifdef DEBUG
@@ -1302,6 +1320,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 	uint8_t* array;
 	uint8_t* struc;
 	uint32_t struct_size;
+	const uint8_t* saved_ptr;
 
 
 	ptr = NULL;
@@ -1348,6 +1367,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 						perror("malloc");
 						return NULL;
 					}
+					saved_ptr = ptr;
 					ptr = deser_struct_server(config, curr_field->body.struc.id, struc, ptr, max_size);
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = struc;
 					if (ptr == NULL) {
@@ -1356,9 +1376,14 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 						#endif
 						return NULL;
 					}
+					max_size -= ptr - saved_ptr;
 					break;
 				case MMDP_ARRAY:
 					nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.array.depends_id].offset));
+					if (nmemb_array == 0) {
+						*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+						break;
+					}
 					if (max_size < nmemb_array*curr_field->body.array.size) {
 						#ifdef DEBUG
 							printf("max_size too small while deserializing %s\n", curr_field->net_name);
@@ -1392,6 +1417,10 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 						return 0;
 					}
 					nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.struct_array.depends_id].offset));
+					if (nmemb_array == 0) {
+						*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+						break;
+					}
 					array = malloc(nmemb_array*struct_size);
 					if (array == NULL) {
 						perror("malloc");
@@ -1400,6 +1429,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = array;
 
 					for (j=0;j<nmemb_array;j++) {
+						saved_ptr = ptr;
 						ptr = deser_struct_server(config, curr_field->body.struct_array.id, array+j*struct_size, ptr, max_size);
 						if (ptr == NULL) {
 							#ifdef DEBUG
@@ -1407,6 +1437,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 							#endif
 							return NULL;
 						}
+						max_size -= ptr - saved_ptr;
 					}
 					break;
 			}
@@ -1507,6 +1538,10 @@ void* ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, void
 					ptr += curr_field->body.normal.size;
 					break;
 				case MMDP_STRUCT:
+					if (*((void**)(((uint8_t*)src)+curr_field->offset)) == NULL) {
+						printf("MMDP: field of type MMDP_STRUCT must not be NULL\n");
+						return NULL;
+					}
 					ptr = ser_struct_client(config, curr_field->body.struc.id, ptr, *((void**)(((uint8_t*)src)+curr_field->offset)));
 					if (ptr == NULL) {
 						#ifdef DEBUG
@@ -1516,6 +1551,13 @@ void* ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, void
 					}
 					break;
 				case MMDP_ARRAY:
+					if (*((uint32_t*)(((uint8_t*)src)+curr_struct->fields[curr_field->body.array.depends_id].offset)) == 0) {
+						break;
+					}
+					if (*((uint8_t**)(((uint8_t*)src)+curr_field->offset)) == NULL) {
+						printf("MMDP: field of type MMDP_ARRAY is NULL, but DEPENDS_ON is not zero\n");
+						return NULL;
+					}
 					for (j=0;j<(*((uint32_t*)(((uint8_t*)src)+curr_struct->fields[curr_field->body.array.depends_id].offset)));j++) {
 						memcpy(ptr, (*((uint8_t**)(((uint8_t*)src)+curr_field->offset)))+j*curr_field->body.array.size, curr_field->body.array.size);
 						swap_bytes_little(ptr, curr_field->body.array.size);
@@ -1534,7 +1576,13 @@ void* ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, void
 						#endif
 						return 0;
 					}
-					printf("struct_size: %u\n", struct_size);
+					if (*((uint32_t*)(((uint8_t*)src)+(curr_struct->fields[curr_field->body.struct_array.depends_id].offset))) == 0) {
+						break;
+					}
+					if (*((uint8_t**)(((uint8_t*)src)+curr_field->offset)) == NULL) {
+						printf("MMDP: field of type MMDP_STRUCT_ARRAY is NULL, but DEPENDS_ON is not zero\n");
+						return NULL;
+					}
 					for (j=0;j<*((uint32_t*)(((uint8_t*)src)+(curr_struct->fields[curr_field->body.struct_array.depends_id].offset)));j++) {
 						ptr = ser_struct_client(config, curr_field->body.struct_array.id, ptr, (*((uint8_t**)(((uint8_t*)src)+curr_field->offset)))+j*struct_size);
 						if (ptr == NULL) {
@@ -1570,6 +1618,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 	uint8_t* array;
 	uint8_t* struc;
 	uint32_t struct_size;
+	const uint8_t* saved_ptr;
 
 
 	ptr = NULL;
@@ -1616,6 +1665,8 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						perror("malloc");
 						return NULL;
 					}
+
+					saved_ptr = ptr;
 					ptr = deser_struct_client(config, curr_field->body.struc.id, struc, ptr, max_size);
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = struc;
 					if (ptr == NULL) {
@@ -1624,9 +1675,20 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						#endif
 						return NULL;
 					}
+					max_size -= ptr - saved_ptr;
 					break;
 				case MMDP_ARRAY:
 					nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.array.depends_id].offset));
+					if (nmemb_array == 0) {
+						*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+						break;
+					}
+					if (max_size < nmemb_array*curr_field->body.array.size) {
+						#ifdef DEBUG
+							printf("max_size too small while deserializing %s\n", curr_field->net_name);
+						#endif
+						return NULL;
+					}
 					if (max_size < nmemb_array*curr_field->body.array.size) {
 						#ifdef DEBUG
 							printf("max_size too small while deserializing %s\n", curr_field->net_name);
@@ -1660,6 +1722,10 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						return NULL;
 					}
 					nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.struct_array.depends_id].offset));
+					if (nmemb_array == 0) {
+						*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+						break;
+					}
 					array = malloc(nmemb_array*struct_size);
 					if (array == NULL) {
 						perror("malloc");
@@ -1668,6 +1734,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = array;
 
 					for (j=0;j<nmemb_array;j++) {
+						saved_ptr = ptr;
 						ptr = deser_struct_client(config, curr_field->body.struct_array.id, array+j*struct_size, ptr, max_size);
 						if (ptr == NULL) {
 							#ifdef DEBUG
@@ -1675,6 +1742,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 							#endif
 							return NULL;
 						}
+						max_size -= ptr - saved_ptr;
 					}
 					break;
 			}
@@ -1692,6 +1760,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 			printf("unble to deserialize custom struct %s\n", mmdp_capability.custom_structs[id-mmdp_capability.mmdp_struct_num].net_name);
 			return NULL;
 		}
+		// here we dont need to decrement max_size since we will quit anyways
 		return ptr;
 	}
 	return ptr;
