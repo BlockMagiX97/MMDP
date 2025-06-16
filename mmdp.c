@@ -172,7 +172,18 @@ void print_capability(struct mmdp_capability* cap) {
 	}
 }
 
-void free_capability(void) {
+void free_capability(struct mmdp_capability* cap) {
+	uint32_t i;
+	struct mmdp_struct* curr_struct;
+	for (i=0;i<cap->mmdp_struct_num;i++) {
+		curr_struct = cap->mmdp_structs+i;
+		free(curr_struct->fields);
+		curr_struct->fields = NULL; /* just to be sure */
+	}
+	free(cap->mmdp_structs);
+	cap->mmdp_structs = NULL;
+	/* we cannot free custom_structs since user provided them to us and we dont know if it is heap allocated */
+	return;
 }
 
 int generate_capability(uint32_t c_struct_num, struct mmdp_custom_struct* c_structs) {
@@ -221,7 +232,7 @@ int generate_capability(uint32_t c_struct_num, struct mmdp_custom_struct* c_stru
 					}
 
 					printf("MMDP: Didnt find matching struct\n");
-					free_capability();
+					free_capability(&mmdp_capability);
 					return -1;
 				mmdp_struct_success:
 					break;
@@ -238,7 +249,7 @@ int generate_capability(uint32_t c_struct_num, struct mmdp_custom_struct* c_stru
 					}
 					if (mmdp_capability.mmdp_structs[i].fields[j].body.array.depends_id == UINT32_MAX) {
 						printf("MMDP: Didnt find matching depends\n");
-						free_capability();
+						free_capability(&mmdp_capability);
 						return -1;
 					}
 					break;
@@ -257,13 +268,13 @@ int generate_capability(uint32_t c_struct_num, struct mmdp_custom_struct* c_stru
 					}
 
 					printf("MMDP: Didnt find matching struct\n");
-					free_capability();
+					free_capability(&mmdp_capability);
 					return -1;
 				mmdp_struct_array_struct_success:
 					mmdp_capability.mmdp_structs[i].fields[j].body.struct_array.depends_id = UINT32_MAX;
 					for (k=0;k<mmdp_capability.mmdp_structs[i].fields_num;k++) {
 						if (mmdp_capability.mmdp_structs[i].fields[k].type != MMDP_NORMAL) {
-							break;
+							continue;
 						}
 						if (strcmp(mmdp_capability.mmdp_structs[i].fields[k].body.normal._name, mmdp_capability.mmdp_structs[i].fields[j].body.struct_array._depends_name) == 0) {
 							mmdp_capability.mmdp_structs[i].fields[j].body.struct_array.depends_id = k;
@@ -272,7 +283,7 @@ int generate_capability(uint32_t c_struct_num, struct mmdp_custom_struct* c_stru
 					}
 					if (mmdp_capability.mmdp_structs[i].fields[j].body.struct_array.depends_id == UINT32_MAX) {
 						printf("MMDP: Didnt find matching depends\n");
-						free_capability();
+						free_capability(&mmdp_capability);
 						return -1;
 					}
 					break;
@@ -327,6 +338,7 @@ uint32_t sizeof_ser_capability(void) {
 	return size;
 }
 
+/* return a heap allocated pointer. up to the user to free it */
 void* serialize_capability(uint32_t* size_out) {
 	uint8_t *ser_buf;
 	uint8_t *ptr;
@@ -365,11 +377,11 @@ void* serialize_capability(uint32_t* size_out) {
 
 		#ifdef DEBUG
 			printf("struct_flags: ");
-			print_b32((curr_struct->fields_num & (~(0xffffffff << 31))) | (IS_FLAG_ACTIVE(curr_struct->flags, MMDP_IS_ESSENTIAL)<< 31));
+			print_b32((curr_struct->fields_num & (~(UINT32_MAX<< 31))) | (IS_FLAG_ACTIVE(curr_struct->flags, MMDP_IS_ESSENTIAL)<< 31));
 		#endif
 		*((uint32_t*)ptr) = htonl(
 			/* zero out first 2 bits */                                /* add is_essential flag */
-			(curr_struct->fields_num & (~(0xffffffff << 31))) | (IS_FLAG_ACTIVE(curr_struct->flags, MMDP_IS_ESSENTIAL)<< 31)
+			(curr_struct->fields_num & (~(UINT32_MAX << 31))) | (IS_FLAG_ACTIVE(curr_struct->flags, MMDP_IS_ESSENTIAL)<< 31)
 		);
 		ptr += 4;
 		for (j=0;j<curr_struct->fields_num;j++) {
@@ -458,6 +470,7 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 	out->custom_structs = malloc(sizeof(struct mmdp_custom_struct)*out->custom_struct_num);
 	if (out->custom_structs == NULL) {
 		perror("malloc");
+		free(out->mmdp_structs);
 		return -1;
 	}
 	ptr += 4;
@@ -470,6 +483,17 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 			#ifdef DEBUG
 				printf("size is too small while recving struct.net_name\n");
 			#endif
+			for(i--;i>=0;i--) {
+				curr_struct = out->mmdp_structs+i;
+				free((void*)curr_struct->net_name);
+				for(j=0;j<curr_struct->fields_num;j++){
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free(curr_struct->fields);
+			}
+			free(out->mmdp_structs);
+			free(out->custom_structs);
 			return -1;
 		}
 		/* checked size beforehand */
@@ -478,6 +502,17 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 		size -= len+1;
 		if (curr_struct->net_name == NULL) {
 			perror("strndup");
+			for(i--;i>=0;i--) {
+				curr_struct = out->mmdp_structs+i;
+				free((void*)curr_struct->net_name);
+				for(j=0;j<curr_struct->fields_num;j++){
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free(curr_struct->fields);
+			}
+			free(out->mmdp_structs);
+			free(out->custom_structs);
 			return -1;
 		}
 		#ifdef DEBUG
@@ -488,6 +523,18 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 			#ifdef DEBUG
 				printf("size is too small while recving struct.num_fields\n");
 			#endif
+			free((void*)curr_struct->net_name);
+			for(i--;i>=0;i--) {
+				curr_struct = out->mmdp_structs+i;
+				free((void*)curr_struct->net_name);
+				for(j=0;j<curr_struct->fields_num;j++){
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free(curr_struct->fields);
+			}
+			free(out->mmdp_structs);
+			free(out->custom_structs);
 			return -1;
 		}
 		net_num_fields = ntohl(*((uint32_t*)ptr));
@@ -510,6 +557,19 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 		if (curr_struct->fields == NULL) {
 			perror("malloc");
 			return -1;
+			free((void*)curr_struct->net_name);
+			for(i--;i>=0;i--) {
+				curr_struct = out->mmdp_structs+i;
+				free((void*)curr_struct->net_name);
+				for(j=0;j<curr_struct->fields_num;j++){
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free(curr_struct->fields);
+			}
+			free(out->mmdp_structs);
+			free(out->custom_structs);
+
 		}
 		for (j=0;j<curr_struct->fields_num;j++) {
 			curr_field = curr_struct->fields+j;
@@ -520,6 +580,22 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 				#ifdef DEBUG
 					printf("size is too small while recving field.net_name\n");
 				#endif
+				for(j--;j>=0;j--) {
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free((void*)curr_struct->net_name);
+				for(i--;i>=0;i--) {
+					curr_struct = out->mmdp_structs+i;
+					free((void*)curr_struct->net_name);
+					for(j=0;j<curr_struct->fields_num;j++){
+						curr_field = curr_struct->fields+j;
+						free((void*)curr_field->net_name);
+					}
+					free(curr_struct->fields);
+				}
+				free(out->mmdp_structs);
+				free(out->custom_structs);
 				return -1;
 			}
 			/* checked size beforehand */
@@ -529,6 +605,23 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 			if (curr_field->net_name == NULL) {
 				perror("strndup");
 				return -1;
+				for(j--;j>=0;j--) {
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free((void*)curr_struct->net_name);
+				for(i--;i>=0;i--) {
+					curr_struct = out->mmdp_structs+i;
+					free((void*)curr_struct->net_name);
+					for(j=0;j<curr_struct->fields_num;j++){
+						curr_field = curr_struct->fields+j;
+						free((void*)curr_field->net_name);
+					}
+					free(curr_struct->fields);
+				}
+				free(out->mmdp_structs);
+				free(out->custom_structs);
+
 			}
 			#ifdef DEBUG
 				printf("\tnet_field: %s\n", curr_field->net_name);
@@ -538,6 +631,23 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 					printf("size is too small while recving field.flags\n");
 				#endif
 				return -1;
+				free((void*)curr_field->net_name);
+				for(j--;j>=0;j--) {
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free((void*)curr_struct->net_name);
+				for(i--;i>=0;i--) {
+					curr_struct = out->mmdp_structs+i;
+					free((void*)curr_struct->net_name);
+					for(j=0;j<curr_struct->fields_num;j++){
+						curr_field = curr_struct->fields+j;
+						free((void*)curr_field->net_name);
+					}
+					free(curr_struct->fields);
+				}
+				free(out->mmdp_structs);
+				free(out->custom_structs);
 			}
 			net_field_flags = *ptr;
 			ptr+=1;
@@ -560,6 +670,24 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 						#ifdef DEBUG
 							printf("size is too small while recving field.body.normal.size\n");
 						#endif
+
+						free((void*)curr_field->net_name);
+						for(j--;j>=0;j--) {
+							curr_field = curr_struct->fields+j;
+							free((void*)curr_field->net_name);
+						}
+						free((void*)curr_struct->net_name);
+						for(i--;i>=0;i--) {
+							curr_struct = out->mmdp_structs+i;
+							free((void*)curr_struct->net_name);
+							for(j=0;j<curr_struct->fields_num;j++){
+								curr_field = curr_struct->fields+j;
+								free((void*)curr_field->net_name);
+							}
+							free(curr_struct->fields);
+						}
+						free(out->mmdp_structs);
+						free(out->custom_structs);
 						return -1;
 					}
 					curr_field->body.normal.size = ntohl(*((uint32_t*)ptr));
@@ -571,6 +699,24 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 						#ifdef DEBUG
 							printf("size is too small while recving field.body.struc.id\n");
 						#endif
+						free((void*)curr_field->net_name);
+						for(j--;j>=0;j--) {
+							curr_field = curr_struct->fields+j;
+							free((void*)curr_field->net_name);
+						}
+						free((void*)curr_struct->net_name);
+						for(i--;i>=0;i--) {
+							curr_struct = out->mmdp_structs+i;
+							free((void*)curr_struct->net_name);
+							for(j=0;j<curr_struct->fields_num;j++){
+								curr_field = curr_struct->fields+j;
+								free((void*)curr_field->net_name);
+							}
+							free(curr_struct->fields);
+						}
+						free(out->mmdp_structs);
+						free(out->custom_structs);
+
 						return -1;
 					}
 					curr_field->body.struc.id = ntohl(*((uint32_t*)ptr));
@@ -583,6 +729,24 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 							printf("size is too small while recving field.body.array.size\n");
 						#endif
 						return -1;
+						free((void*)curr_field->net_name);
+						for(j--;j>=0;j--) {
+							curr_field = curr_struct->fields+j;
+							free((void*)curr_field->net_name);
+						}
+						free((void*)curr_struct->net_name);
+						for(i--;i>=0;i--) {
+							curr_struct = out->mmdp_structs+i;
+							free((void*)curr_struct->net_name);
+							for(j=0;j<curr_struct->fields_num;j++){
+								curr_field = curr_struct->fields+j;
+								free((void*)curr_field->net_name);
+							}
+							free(curr_struct->fields);
+						}
+						free(out->mmdp_structs);
+						free(out->custom_structs);
+
 					}
 					curr_field->body.array.size = ntohl(*((uint32_t*)ptr));
 					ptr+=4;
@@ -592,6 +756,24 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 						#ifdef DEBUG
 							printf("size is too small while recving field.body.array.depends_id\n");
 						#endif
+						free((void*)curr_field->net_name);
+						for(j--;j>=0;j--) {
+							curr_field = curr_struct->fields+j;
+							free((void*)curr_field->net_name);
+						}
+						free((void*)curr_struct->net_name);
+						for(i--;i>=0;i--) {
+							curr_struct = out->mmdp_structs+i;
+							free((void*)curr_struct->net_name);
+							for(j=0;j<curr_struct->fields_num;j++){
+								curr_field = curr_struct->fields+j;
+								free((void*)curr_field->net_name);
+							}
+							free(curr_struct->fields);
+						}
+						free(out->mmdp_structs);
+						free(out->custom_structs);
+
 						return -1;
 					}
 					curr_field->body.array.depends_id = ntohl(*((uint32_t*)ptr));
@@ -604,6 +786,24 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 						#ifdef DEBUG
 							printf("size is too small while recving field.body.struct_array.id\n");
 						#endif
+						free((void*)curr_field->net_name);
+						for(j--;j>=0;j--) {
+							curr_field = curr_struct->fields+j;
+							free((void*)curr_field->net_name);
+						}
+						free((void*)curr_struct->net_name);
+						for(i--;i>=0;i--) {
+							curr_struct = out->mmdp_structs+i;
+							free((void*)curr_struct->net_name);
+							for(j=0;j<curr_struct->fields_num;j++){
+								curr_field = curr_struct->fields+j;
+								free((void*)curr_field->net_name);
+							}
+							free(curr_struct->fields);
+						}
+						free(out->mmdp_structs);
+						free(out->custom_structs);
+
 						return -1;
 					}
 					curr_field->body.struct_array.id = ntohl(*((uint32_t*)ptr));
@@ -614,6 +814,24 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 						#ifdef DEBUG
 							printf("size is too small while recving field.body.struct_array.depends_id\n");
 						#endif
+						free((void*)curr_field->net_name);
+						for(j--;j>=0;j--) {
+							curr_field = curr_struct->fields+j;
+							free((void*)curr_field->net_name);
+						}
+						free((void*)curr_struct->net_name);
+						for(i--;i>=0;i--) {
+							curr_struct = out->mmdp_structs+i;
+							free((void*)curr_struct->net_name);
+							for(j=0;j<curr_struct->fields_num;j++){
+								curr_field = curr_struct->fields+j;
+								free((void*)curr_field->net_name);
+							}
+							free(curr_struct->fields);
+						}
+						free(out->mmdp_structs);
+						free(out->custom_structs);
+
 						return -1;
 					}
 					curr_field->body.struct_array.depends_id = ntohl(*((uint32_t*)ptr));
@@ -624,7 +842,25 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 					#ifdef DEBUG
 						printf("INVALID TYPE FAILED\n");
 					#endif
+					free((void*)curr_field->net_name);
+					for(j--;j>=0;j--) {
+						curr_field = curr_struct->fields+j;
+						free((void*)curr_field->net_name);
+					}
+					free((void*)curr_struct->net_name);
+					for(i--;i>=0;i--) {
+						curr_struct = out->mmdp_structs+i;
+						free((void*)curr_struct->net_name);
+						for(j=0;j<curr_struct->fields_num;j++){
+							curr_field = curr_struct->fields+j;
+							free((void*)curr_field->net_name);
+						}
+						free(curr_struct->fields);
+					}
+					free(out->mmdp_structs);
+					free(out->custom_structs);
 					return -1;
+					break;
 			}
 		}
 	}
@@ -635,6 +871,20 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 			#ifdef DEBUG
 				printf("size is too small while recving struct.net_name\n");
 			#endif
+			for(i--;i>=0;i--) {
+				free((void*)out->custom_structs[i].net_name);
+			}
+			for(i=0;i<out->mmdp_struct_num;i++){
+				curr_struct = out->mmdp_structs+i;
+				free((void*)curr_struct->net_name);
+				for(j=0;j<curr_struct->fields_num;j++){
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free(curr_struct->fields);
+			}
+			free(out->mmdp_structs);
+			free(out->custom_structs);
 			return -1;
 		}
 		/* checked size beforehand */
@@ -643,6 +893,20 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 		size -= len+1;
 		if (out->custom_structs[i].net_name == NULL) {
 			perror("strndup");
+			for(i--;i>=0;i--) {
+				free((void*)out->custom_structs[i].net_name);
+			}
+			for(i=0;i<out->mmdp_struct_num;i++){
+				curr_struct = out->mmdp_structs+i;
+				free((void*)curr_struct->net_name);
+				for(j=0;j<curr_struct->fields_num;j++){
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free(curr_struct->fields);
+			}
+			free(out->mmdp_structs);
+			free(out->custom_structs);
 			return -1;
 		}
 		#ifdef DEBUG
@@ -652,6 +916,23 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 			#ifdef DEBUG
 				printf("size is too small while recving custom_struct.flags\n");
 			#endif
+
+			free((void*)out->custom_structs[i].net_name);
+			for(i--;i>=0;i--) {
+				free((void*)out->custom_structs[i].net_name);
+			}
+			for(i=0;i<out->mmdp_struct_num;i++){
+				curr_struct = out->mmdp_structs+i;
+				free((void*)curr_struct->net_name);
+				for(j=0;j<curr_struct->fields_num;j++){
+					curr_field = curr_struct->fields+j;
+					free((void*)curr_field->net_name);
+				}
+				free(curr_struct->fields);
+			}
+			free(out->mmdp_structs);
+			free(out->custom_structs);
+
 			return -1;
 		}
 		out->custom_structs[i].flags = *ptr;
@@ -673,27 +954,35 @@ int create_clientside_config(const struct mmdp_capability* srv_cap, struct mmdp_
 	out->c_to_s_struct_remap = malloc(size);
 	if (out->c_to_s_struct_remap == NULL) {
 		perror("malloc");
-		goto fail;
+		return -1;
 	}
 	/* set all to max */
 	memset(out->c_to_s_struct_remap, 0xff, size);
 
 	out->s_mmdp_struct_num = srv_cap->mmdp_struct_num;
 	out->s_custom_struct_num = srv_cap->custom_struct_num;
+
 	size = sizeof(uint32_t)*(out->s_mmdp_struct_num+out->s_custom_struct_num);
 	out->s_to_c_struct_remap = malloc(size);
 	if (out->s_to_c_struct_remap == NULL) {
 		perror("malloc");
-		goto fail;
+		free(out->s_to_c_struct_remap);
+		out->s_to_c_struct_remap = NULL;
+
+		return -1;
 	}
 	memset(out->s_to_c_struct_remap, 0xff, size);
 
 
 	size = sizeof(uint32_t*)*mmdp_capability.mmdp_struct_num;
-	out->field_order= malloc(size);
+	out->field_order = malloc(size);
 	if (out->field_order == NULL) {
 		perror("malloc");
-		goto fail;
+		free(out->s_to_c_struct_remap);
+		out->s_to_c_struct_remap = NULL;
+		free(out->s_to_c_struct_remap);
+		out->c_to_s_struct_remap = NULL;
+		return -1;
 	}
 	for (i=0;i<mmdp_capability.mmdp_struct_num;i++) {
 		out->field_order[i] = NULL;
@@ -719,7 +1008,17 @@ int create_clientside_config(const struct mmdp_capability* srv_cap, struct mmdp_
 				#ifdef DEBUG
 					printf("essential struct (%s) not supported by server\n", curr_struct->_real_name);
 				#endif
-				goto fail;
+				for (i--;i>=0;i--) {
+					free(out->field_order[i]);
+					out->field_order[i] = NULL;
+				}
+				free(out->s_to_c_struct_remap);
+				out->s_to_c_struct_remap = NULL;
+				free(out->s_to_c_struct_remap);
+				out->c_to_s_struct_remap = NULL;
+				free(out->field_order);
+				out->field_order = NULL;
+				return -1;
 			}
 			continue;
 		}
@@ -728,7 +1027,17 @@ int create_clientside_config(const struct mmdp_capability* srv_cap, struct mmdp_
 		out->field_order[i] = malloc(size);
 		if (out->field_order[i] == NULL) {
 			perror("malloc");
-			goto fail;
+			for (i--;i>=0;i--) {
+				free(out->field_order[i]);
+				out->field_order[i] = NULL;
+			}
+			free(out->s_to_c_struct_remap);
+			out->s_to_c_struct_remap = NULL;
+			free(out->s_to_c_struct_remap);
+			out->c_to_s_struct_remap = NULL;
+			free(out->field_order);
+			out->field_order = NULL;
+			return -1;
 		}
 		memset(out->field_order[i], 0xff, size);
 		order = 0;
@@ -743,30 +1052,30 @@ int create_clientside_config(const struct mmdp_capability* srv_cap, struct mmdp_
 				order++;
 				break;
 			}
+			if (IS_FLAG_ACTIVE(curr_field->flags, MMDP_FIELD_IS_ESSENTIAL)) {
+				if (out->field_order[i][order] == 0xff) {
+				#ifdef DEBUG
+					printf("essential struct (%s) not supported by server\n", curr_struct->_real_name);
+				#endif
+				free(out->field_order[i]);
+				out->field_order[i] = NULL;
+				for (i--;i>=0;i--) {
+					free(out->field_order[i]);
+					out->field_order[i] = NULL;
+				}
+				free(out->s_to_c_struct_remap);
+				out->s_to_c_struct_remap = NULL;
+				free(out->s_to_c_struct_remap);
+				out->c_to_s_struct_remap = NULL;
+				free(out->field_order);
+				out->field_order = NULL;
+
+
+				return -1;
+				}
+			}
 		}
 		/* now we could possibly save some memory by shrinking the field_order[i] to the required size. TODO: implement this */
-
-/*
-		for (j=0;j<curr_struct->fields_num;j++) {
-			curr_field = curr_struct->fields+j;
-			for (k=0;k<srv_struct->fields_num;k++) {
-				if (strcmp(curr_field->net_name,srv_struct->fields[k].net_name) != 0) {
-					continue;
-				}
-				out->field_order[i][j] = k;
-				break;
-			}
-			if (out->field_order[i][j] == UINT32_MAX) {
-				if (IS_FLAG_ACTIVE(curr_field->flags, MMDP_FIELD_IS_ESSENTIAL)) {
-					#ifdef DEBUG
-						printf("essential field (struct: %s, field_net: %s) not supported by server\n", curr_struct->_real_name, curr_field->net_name);
-					#endif
-					goto fail;
-				}
-				continue;
-			}
-		}
-		*/
 	}
 	for (i=0;i<mmdp_capability.custom_struct_num;i++) {
 		for(j=0;j<srv_cap->custom_struct_num;j++) {
@@ -784,7 +1093,17 @@ int create_clientside_config(const struct mmdp_capability* srv_cap, struct mmdp_
 				#ifdef DEBUG
 					printf("essential custom struct (%s) not supported by server\n", curr_struct->_real_name);
 				#endif
-				goto fail;
+				for (i=0;i<mmdp_capability.mmdp_struct_num;i++){
+					free(out->field_order[i]);
+					out->field_order[i] = NULL;
+				}
+				free(out->s_to_c_struct_remap);
+				out->s_to_c_struct_remap = NULL;
+				free(out->s_to_c_struct_remap);
+				out->c_to_s_struct_remap = NULL;
+				free(out->field_order);
+				out->field_order = NULL;
+				return -1;
 			}
 		}
 	}
@@ -808,8 +1127,6 @@ int create_clientside_config(const struct mmdp_capability* srv_cap, struct mmdp_
 	
 	/* we dont need to validate server requirements since it will do it itself */
 	return 0;
-fail:
-	return -1;
 }
 
 void* convert_clientside_to_serealized_serverside(const struct mmdp_clientside_config *cconfig, uint32_t* out_size) {
@@ -1760,7 +2077,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 			printf("unble to deserialize custom struct %s\n", mmdp_capability.custom_structs[id-mmdp_capability.mmdp_struct_num].net_name);
 			return NULL;
 		}
-		// here we dont need to decrement max_size since we will quit anyways
+		/* here we dont need to decrement max_size since we will quit anyways */
 		return ptr;
 	}
 	return ptr;

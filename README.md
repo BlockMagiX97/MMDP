@@ -9,6 +9,7 @@ maximaly mininal dynamic protocol
 
 ## TODO
 - remove all memory leaks
+
 - add ajustable limit to ALL size fields 
 - add checks for essentiality
 - add not-prefered fields (are sent only if client or server require them)
