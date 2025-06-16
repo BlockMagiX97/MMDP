@@ -156,4 +156,6 @@ int init_connection_config_client(int fd, struct mmdp_clientside_config* conf_de
 /* is NOT thread-safe */
 int init_mmdp_lib(uint32_t c_struct_num, struct mmdp_custom_struct* c_structs, int is_server);
 
+void free_server_config(struct mmdp_serverside_config* config);
+void free_client_config(struct mmdp_clientside_config* config);
 #endif

@@ -61,6 +61,9 @@ int main(void) {
 		return 0;
 	}
 
+	msg.msg[msg.msg_len-1] = 0;
 	printf("recieved: %s\n", msg.msg);
+	free(msg.msg);
+	free_client_config(&c_config);
 	return 0;
 }

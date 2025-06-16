@@ -1050,30 +1050,32 @@ int create_clientside_config(const struct mmdp_capability* srv_cap, struct mmdp_
 				}
 				out->field_order[i][order] = k;
 				order++;
-				break;
+				goto skip_essential;
 			}
 			if (IS_FLAG_ACTIVE(curr_field->flags, MMDP_FIELD_IS_ESSENTIAL)) {
-				if (out->field_order[i][order] == 0xff) {
-				#ifdef DEBUG
-					printf("essential struct (%s) not supported by server\n", curr_struct->_real_name);
-				#endif
-				free(out->field_order[i]);
-				out->field_order[i] = NULL;
-				for (i--;i>=0;i--) {
+				if (out->field_order[i][order] == UINT32_MAX) {
+					#ifdef DEBUG
+						printf("essential struct (%s) not supported by server\n", curr_struct->_real_name);
+					#endif
 					free(out->field_order[i]);
 					out->field_order[i] = NULL;
-				}
-				free(out->s_to_c_struct_remap);
-				out->s_to_c_struct_remap = NULL;
-				free(out->s_to_c_struct_remap);
-				out->c_to_s_struct_remap = NULL;
-				free(out->field_order);
-				out->field_order = NULL;
+					for (i--;i>=0;i--) {
+						free(out->field_order[i]);
+						out->field_order[i] = NULL;
+					}
+					free(out->s_to_c_struct_remap);
+					out->s_to_c_struct_remap = NULL;
+					free(out->s_to_c_struct_remap);
+					out->c_to_s_struct_remap = NULL;
+					free(out->field_order);
+					out->field_order = NULL;
 
 
-				return -1;
+					return -1;
 				}
 			}
+		skip_essential:
+			continue;
 		}
 		/* now we could possibly save some memory by shrinking the field_order[i] to the required size. TODO: implement this */
 	}
@@ -1159,7 +1161,7 @@ void* convert_clientside_to_serealized_serverside(const struct mmdp_clientside_c
 	size += 4; /* num_mmdp_structs */
 	size += 4; /* num_custom_structs */
 
-	/* after this boundery there are custom structs */
+	/* after this boundary there are custom structs */
 	for (i=0;i<cconfig->s_mmdp_struct_num;i++) {
 		client_id = cconfig->s_to_c_struct_remap[i];
 		printf("client_id=%d\n", client_id);
@@ -1204,6 +1206,7 @@ void* convert_clientside_to_serealized_serverside(const struct mmdp_clientside_c
 	ser_ss_config = malloc(size);
 	if (ser_ss_config == NULL) {
 		perror("malloc");
+		free(fields_num);
 		return NULL;
 	}
 	memset(ser_ss_config, 0, size);
@@ -1246,14 +1249,16 @@ void* convert_clientside_to_serealized_serverside(const struct mmdp_clientside_c
 	}
 	printf("here1.6\n");
 	#ifdef DEBUG
-		fd = open("./log/ser_ssconf", O_CREAT|O_WRONLY, 0666);
+		fd = open("./log/ser_ssconf", O_TRUNC|O_CREAT|O_WRONLY, 0666);
 		if (fd < 0) {
 			perror("open ./log/ser_ssconf");
 		} else {
 			write(fd, ser_ss_config, size);
+			close(fd);
 		}
-		close(fd);
 	#endif
+	free(fields_num);
+	fields_num = NULL;
 	*out_size = size;
 
 	return ser_ss_config;
@@ -1297,6 +1302,8 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 	sconfig->field_mask = malloc(sizeof(uint32_t*)*mmdp_capability.mmdp_struct_num);
 	if (sconfig->field_mask == NULL) {
 		perror("malloc");
+		free(sconfig->struct_mask);
+		sconfig->struct_mask = NULL;
 		return -1;
 	}
 	memset(sconfig->field_mask, 0,sizeof(uint32_t*)*mmdp_capability.mmdp_struct_num);
@@ -1305,6 +1312,14 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 		sconfig->field_mask[i] = malloc(mmdp_capability.mmdp_structs[i].fields_num);
 		if (sconfig->field_mask[i] == NULL) {
 			perror("malloc");
+			for(i--;i>=0;i--) {
+				free(sconfig->field_mask[i]);
+				sconfig->field_mask[i] = NULL;
+			}
+			free(sconfig->field_mask);
+			sconfig->field_mask = NULL;
+			free(sconfig->struct_mask);
+			sconfig->struct_mask = NULL;
 			return -1;
 		}
 		memset(sconfig->field_mask[i], 0, mmdp_capability.mmdp_structs[i].fields_num);
@@ -1315,6 +1330,14 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 		#ifdef DEBUG
 			printf("size too small unable to get num_mmdp_ser\n");
 		#endif
+		for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+			free(sconfig->field_mask[i]);
+			sconfig->field_mask[i] = NULL;
+		}
+		free(sconfig->field_mask);
+		sconfig->field_mask = NULL;
+		free(sconfig->struct_mask);
+		sconfig->struct_mask = NULL;
 		return -1;
 	}
 	num_mmdp_ser = ntohl(*((uint32_t*)ptr));
@@ -1325,6 +1348,15 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 		#ifdef DEBUG
 			printf("size too small unable to get num_custom_ser\n");
 		#endif
+		for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+			free(sconfig->field_mask[i]);
+			sconfig->field_mask[i] = NULL;
+		}
+		free(sconfig->field_mask);
+		sconfig->field_mask = NULL;
+		free(sconfig->struct_mask);
+		sconfig->struct_mask = NULL;
+
 		return -1;
 	}
 	num_custom_ser = ntohl(*((uint32_t*)ptr));
@@ -1333,12 +1365,32 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 	struct_net_names = malloc(sizeof(char*)*num_mmdp_ser);
 	if (struct_net_names == NULL) {
 		perror("malloc");
+		for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+			free(sconfig->field_mask[i]);
+			sconfig->field_mask[i] = NULL;
+		}
+		free(sconfig->field_mask);
+		sconfig->field_mask = NULL;
+		free(sconfig->struct_mask);
+		sconfig->struct_mask = NULL;
+
 		return -1;
 	}
 
 	custom_struct_net_names = malloc(sizeof(char*)*num_custom_ser);
 	if (custom_struct_net_names == NULL) {
 		perror("malloc");
+		free(struct_net_names);
+		struct_net_names = NULL;
+		for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+			free(sconfig->field_mask[i]);
+			sconfig->field_mask[i] = NULL;
+		}
+		free(sconfig->field_mask);
+		sconfig->field_mask = NULL;
+		free(sconfig->struct_mask);
+		sconfig->struct_mask = NULL;
+
 		return -1;
 	}
 
@@ -1346,6 +1398,20 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 	field_net_names = malloc(sizeof(char**)*num_mmdp_ser);
 	if (field_net_names == NULL) {
 		perror("malloc");
+		free(custom_struct_net_names);
+		custom_struct_net_names = NULL;
+		free(struct_net_names);
+		struct_net_names = NULL;
+		for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+			free(sconfig->field_mask[i]);
+			sconfig->field_mask[i] = NULL;
+		}
+		free(sconfig->field_mask);
+		sconfig->field_mask = NULL;
+		free(sconfig->struct_mask);
+		sconfig->struct_mask = NULL;
+
+
 		return -1;
 	}
 	memset(field_net_names, 0, sizeof(char**)*num_mmdp_ser);
@@ -1353,6 +1419,20 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 	num_fields = malloc(sizeof(uint32_t)*num_mmdp_ser);
 	if (struct_net_names == NULL) {
 		perror("malloc");
+		free(field_net_names);
+		field_net_names = NULL;
+		free(custom_struct_net_names);
+		custom_struct_net_names = NULL;
+		free(struct_net_names);
+		struct_net_names = NULL;
+		for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+			free(sconfig->field_mask[i]);
+			sconfig->field_mask[i] = NULL;
+		}
+		free(sconfig->field_mask);
+		sconfig->field_mask = NULL;
+		free(sconfig->struct_mask);
+		sconfig->struct_mask = NULL;
 		return -1;
 	}
 	memset(num_fields, 0, sizeof(uint32_t)*num_mmdp_ser);
@@ -1365,6 +1445,26 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 			#ifdef DEBUG
 				printf("structname not properly null terminated\n");
 			#endif
+			for (i--;i>=0;i--) {
+				free(field_net_names[i]);
+				field_net_names[i] = NULL;
+			}
+			free(num_fields);
+			num_fields = NULL;
+			free(field_net_names);
+			field_net_names = NULL;
+			free(custom_struct_net_names);
+			custom_struct_net_names = NULL;
+			free(struct_net_names);
+			struct_net_names = NULL;
+			for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+				free(sconfig->field_mask[i]);
+				sconfig->field_mask[i] = NULL;
+			}
+			free(sconfig->field_mask);
+			sconfig->field_mask = NULL;
+			free(sconfig->struct_mask);
+			sconfig->struct_mask = NULL;
 			return -1;
 		}
 		printf("here2.2.2\n");
@@ -1373,13 +1473,33 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 		max_size -= len+1; /* the netname and the null terminator */
 		ptr+=len+1;
 
-		max_size -= 4; /* num_fields */
-		if (max_size < 0) {
+		if (max_size < 4) {
 			#ifdef DEBUG
 				printf("size is too small unable to get num_of_fields\n");
 			#endif
+			for (i--;i>=0;i--) {
+				free(field_net_names[i]);
+				field_net_names[i] = NULL;
+			}
+			free(num_fields);
+			num_fields = NULL;
+			free(field_net_names);
+			field_net_names = NULL;
+			free(custom_struct_net_names);
+			custom_struct_net_names = NULL;
+			free(struct_net_names);
+			struct_net_names = NULL;
+			for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+				free(sconfig->field_mask[i]);
+				sconfig->field_mask[i] = NULL;
+			}
+			free(sconfig->field_mask);
+			sconfig->field_mask = NULL;
+			free(sconfig->struct_mask);
+			sconfig->struct_mask = NULL;
 			return -1;
 		}
+		max_size -= 4; /* num_fields */
 		num_fields[i] = ntohl(*((uint32_t*)ptr));
 		ptr += 4;
 
@@ -1387,6 +1507,26 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 		field_net_names[i] = malloc(sizeof(char*)*num_fields[i]);
 		if (field_net_names[i] == NULL) {
 			perror("malloc");
+			for (i--;i>=0;i--) {
+				free(field_net_names[i]);
+				field_net_names[i] = NULL;
+			}
+			free(num_fields);
+			num_fields = NULL;
+			free(field_net_names);
+			field_net_names = NULL;
+			free(custom_struct_net_names);
+			custom_struct_net_names = NULL;
+			free(struct_net_names);
+			struct_net_names = NULL;
+			for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+				free(sconfig->field_mask[i]);
+				sconfig->field_mask[i] = NULL;
+			}
+			free(sconfig->field_mask);
+			sconfig->field_mask = NULL;
+			free(sconfig->struct_mask);
+			sconfig->struct_mask = NULL;
 			return -1;
 		}
 
@@ -1400,6 +1540,26 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 				#ifdef DEBUG
 					printf("fieldname not properly null terminated\n");
 				#endif
+				for (;i>=0;i--) {
+					free(field_net_names[i]);
+					field_net_names[i] = NULL;
+				}
+				free(num_fields);
+				num_fields = NULL;
+				free(field_net_names);
+				field_net_names = NULL;
+				free(custom_struct_net_names);
+				custom_struct_net_names = NULL;
+				free(struct_net_names);
+				struct_net_names = NULL;
+				for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+					free(sconfig->field_mask[i]);
+					sconfig->field_mask[i] = NULL;
+				}
+				free(sconfig->field_mask);
+				sconfig->field_mask = NULL;
+				free(sconfig->struct_mask);
+				sconfig->struct_mask = NULL;
 				return -1;
 			}
 			printf("here2.2.4.3\n");
@@ -1418,6 +1578,27 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 			#ifdef DEBUG
 				printf("custom_struct_name not properly null terminated\n");
 			#endif
+			for (i=0;i<num_mmdp_ser;i++) {
+				free(field_net_names[i]);
+				field_net_names[i] = NULL;
+			}
+			free(num_fields);
+			num_fields = NULL;
+			free(field_net_names);
+			field_net_names = NULL;
+			free(custom_struct_net_names);
+			custom_struct_net_names = NULL;
+			free(struct_net_names);
+			struct_net_names = NULL;
+			for(i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+				free(sconfig->field_mask[i]);
+				sconfig->field_mask[i] = NULL;
+			}
+			free(sconfig->field_mask);
+			sconfig->field_mask = NULL;
+			free(sconfig->struct_mask);
+			sconfig->struct_mask = NULL;
+
 			return -1;
 		}
 		custom_struct_net_names[i] = (char*)ptr;
@@ -1476,6 +1657,18 @@ int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized
 	#endif
 	printf("here2.6\n");
 
+	for (i=0;i<num_mmdp_ser;i++) {
+		free(field_net_names[i]);
+		field_net_names[i] = NULL;
+	}
+	free(num_fields);
+	num_fields = NULL;
+	free(field_net_names);
+	field_net_names = NULL;
+	free(custom_struct_net_names);
+	custom_struct_net_names = NULL;
+	free(struct_net_names);
+	struct_net_names = NULL;
 	return 0;
 }
 
@@ -1661,7 +1854,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("max_size too small while deserializing %s\n", curr_field->net_name);
 						#endif
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					memcpy(((uint8_t*)dest)+curr_field->offset, ptr, curr_field->body.normal.size);
 					swap_bytes_little(((uint8_t*)dest)+curr_field->offset, curr_field->body.normal.size);
@@ -1677,12 +1870,12 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("SOMETHINGS WRONG, I CAN FEEL IT\n");
 						#endif
-						return 0;
+						goto mmdp_fail_clean;
 					}
 					struc = malloc(struct_size);
 					if (struc == NULL) {
 						perror("malloc");
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					saved_ptr = ptr;
 					ptr = deser_struct_server(config, curr_field->body.struc.id, struc, ptr, max_size);
@@ -1691,7 +1884,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("max_size too small while deserializing %s\n", curr_field->net_name);
 						#endif
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					max_size -= ptr - saved_ptr;
 					break;
@@ -1705,14 +1898,14 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("max_size too small while deserializing %s\n", curr_field->net_name);
 						#endif
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					max_size -= nmemb_array*curr_field->body.array.size;
 
 					array = malloc(nmemb_array*curr_field->body.array.size);
 					if (array == NULL) {
 						perror("malloc");
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = array;
 					printf("array: %p\n" , array);
@@ -1731,7 +1924,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("SOMETHINGS WRONG, I CAN FEEL IT\n");
 						#endif
-						return 0;
+						goto mmdp_fail_clean;
 					}
 					nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.struct_array.depends_id].offset));
 					if (nmemb_array == 0) {
@@ -1741,7 +1934,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 					array = malloc(nmemb_array*struct_size);
 					if (array == NULL) {
 						perror("malloc");
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = array;
 
@@ -1752,7 +1945,7 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 							#ifdef DEBUG
 								printf("unable to deserialize struct\n");
 							#endif
-							return NULL;
+							goto mmdp_fail_clean;
 						}
 						max_size -= ptr - saved_ptr;
 					}
@@ -1775,7 +1968,35 @@ const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t 
 		return ptr;
 	}
 	return ptr;
-
+mmdp_fail_clean:
+	for (i--;i>=0;i--) {
+		curr_field = curr_struct->fields+i;
+		switch (curr_field->type) {
+			case MMDP_STRUCT:
+				free(*((void**)(((uint8_t*)dest)+curr_field->offset)));
+				*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+				break;
+			case MMDP_ARRAY:
+				nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.array.depends_id].offset));
+				if (nmemb_array == 0) {
+					break;
+				}
+				free(*((void**)(((uint8_t*)dest)+curr_field->offset)));
+				*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+				break;
+			case MMDP_STRUCT_ARRAY:
+				nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.struct_array.depends_id].offset));
+				if (nmemb_array == 0) {
+					break;
+				}
+				free(*((void**)(((uint8_t*)dest)+curr_field->offset)));
+				*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+				break;
+			default:
+				break;
+		}
+	}
+	return NULL;
 }
 
 uint32_t sizeof_ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, const void* src) {
@@ -1959,7 +2180,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("max_size too small while deserializing %s\n", curr_field->net_name);
 						#endif
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					memcpy(((uint8_t*)dest)+curr_field->offset, ptr, curr_field->body.normal.size);
 					swap_bytes_little(((uint8_t*)dest)+curr_field->offset, curr_field->body.normal.size);
@@ -1975,12 +2196,12 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("SOMETHINGS WRONG, I CAN FEEL IT\n");
 						#endif
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					struc = malloc(struct_size);
 					if (struc == NULL) {
 						perror("malloc");
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 
 					saved_ptr = ptr;
@@ -1990,7 +2211,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("max_size too small while deserializing %s\n", curr_field->net_name);
 						#endif
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					max_size -= ptr - saved_ptr;
 					break;
@@ -2004,20 +2225,20 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("max_size too small while deserializing %s\n", curr_field->net_name);
 						#endif
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					if (max_size < nmemb_array*curr_field->body.array.size) {
 						#ifdef DEBUG
 							printf("max_size too small while deserializing %s\n", curr_field->net_name);
 						#endif
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					max_size -= nmemb_array*curr_field->body.array.size;
 
 					array = malloc(nmemb_array*curr_field->body.array.size);
 					if (array == NULL) {
 						perror("malloc");
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = array;
 					printf("array: %p\n" , array);
@@ -2036,7 +2257,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 						#ifdef DEBUG
 							printf("SOMETHINGS WRONG, I CAN FEEL IT\n");
 						#endif
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.struct_array.depends_id].offset));
 					if (nmemb_array == 0) {
@@ -2046,7 +2267,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 					array = malloc(nmemb_array*struct_size);
 					if (array == NULL) {
 						perror("malloc");
-						return NULL;
+						goto mmdp_fail_clean;
 					}
 					*((void**)(((uint8_t*)dest)+curr_field->offset)) = array;
 
@@ -2057,7 +2278,7 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 							#ifdef DEBUG
 								printf("unable to deserialize struct\n");
 							#endif
-							return NULL;
+							goto mmdp_fail_clean;
 						}
 						max_size -= ptr - saved_ptr;
 					}
@@ -2081,6 +2302,36 @@ const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t 
 		return ptr;
 	}
 	return ptr;
+mmdp_fail_clean:
+	for (i--;i>=0;i--) {
+		curr_field = curr_struct->fields+i;
+		switch (curr_field->type) {
+			case MMDP_STRUCT:
+				free(*((void**)(((uint8_t*)dest)+curr_field->offset)));
+				*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+				break;
+			case MMDP_ARRAY:
+				nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.array.depends_id].offset));
+				if (nmemb_array == 0) {
+					break;
+				}
+				free(*((void**)(((uint8_t*)dest)+curr_field->offset)));
+				*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+				break;
+			case MMDP_STRUCT_ARRAY:
+				nmemb_array = *((uint32_t*)(((uint8_t*)dest)+curr_struct->fields[curr_field->body.struct_array.depends_id].offset));
+				if (nmemb_array == 0) {
+					break;
+				}
+				free(*((void**)(((uint8_t*)dest)+curr_field->offset)));
+				*((void**)(((uint8_t*)dest)+curr_field->offset)) = NULL;
+				break;
+			default:
+				break;
+		}
+	}
+	return NULL;
+
 }
 int send_struct_server(struct mmdp_serverside_config* config, uint32_t id, uint32_t fd, const void* src, void* write_context) {
 	uint32_t size;
@@ -2108,13 +2359,15 @@ int send_struct_server(struct mmdp_serverside_config* config, uint32_t id, uint3
 		#ifdef DEBUG
 			printf("Unable to serialize struct\n");
 		#endif
+		free(packet);
 		return -1;
 	}
 	if (mmdp_write(fd, packet, size, write_context) != 0) {
 		free(packet);
 		return -1;
-		
 	}
+	free(packet);
+	packet = NULL;
 	return 0;
 }
 /* even on fail (when id is invalid) it reads at least 8 bytes from fd */
@@ -2161,6 +2414,8 @@ int recv_struct_server(struct mmdp_serverside_config* config, uint32_t id, uint3
 		free(ser_struct_buffer);
 		return -1;
 	}
+	free(ser_struct_buffer);
+	ser_struct_buffer = NULL;
 	return 0;
 }
 void* recv_struct_server_any(struct mmdp_serverside_config* config, uint32_t* out_id, uint32_t fd, void* read_context) {
@@ -2219,6 +2474,8 @@ void* recv_struct_server_any(struct mmdp_serverside_config* config, uint32_t* ou
 		free(struct_out);
 		return NULL;
 	}
+	free(ser_struct_buffer);
+	ser_struct_buffer = NULL;
 	*out_id = id;
 	return struct_out;
 }
@@ -2248,6 +2505,7 @@ int send_struct_client(struct mmdp_clientside_config* config, uint32_t id, uint3
 		#ifdef DEBUG
 			printf("Unable to serialize struct\n");
 		#endif
+		free(packet);
 		return -1;
 	}
 	if (mmdp_write(fd, packet, size, write_context) != 0) {
@@ -2255,6 +2513,8 @@ int send_struct_client(struct mmdp_clientside_config* config, uint32_t id, uint3
 		return -1;
 		
 	}
+	free(packet);
+	packet = NULL;
 	return 0;
 }
 /* when -1 is returned (when id is invalid) it reads at least 8 bytes from fd */
@@ -2314,6 +2574,8 @@ int recv_struct_client(struct mmdp_clientside_config* config, uint32_t id, uint3
 		free(ser_struct_buffer);
 		return -1;
 	}
+	free(ser_struct_buffer);
+	ser_struct_buffer = NULL;
 	return 0;
 }
 void* recv_struct_client_any(struct mmdp_clientside_config* config, uint32_t* out_id, uint32_t fd, void* read_context) {
@@ -2372,6 +2634,8 @@ void* recv_struct_client_any(struct mmdp_clientside_config* config, uint32_t* ou
 		free(struct_out);
 		return NULL;
 	}
+	free(ser_struct_buffer);
+	ser_struct_buffer = NULL;
 	*out_id = id;
 	return struct_out;
 }
@@ -2423,8 +2687,10 @@ int init_connection_config_server(int fd, struct mmdp_serverside_config* conf_de
 		free(ser_serverconfig);
 		return -1;
 	} 
+	free(ser_serverconfig);
 	return 0;
 }
+/* TODO: fix leaks here */
 int init_connection_config_client(int fd, struct mmdp_clientside_config* conf_dest, void* write_context, void* read_context) {
 	uint32_t size;
 	void* ser_cap_s;
@@ -2463,5 +2729,29 @@ int init_connection_config_client(int fd, struct mmdp_clientside_config* conf_de
 		printf("MMDP: Unable to send serialized config\n");
 		return -1;
 	}
+	free(ser_ss_config);
 	return 0;
+}
+void free_server_config(struct mmdp_serverside_config* config) {
+	uint32_t i;
+	for (i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+		free(config->field_mask[i]);
+		config->field_mask[i] = NULL;
+	}
+	free(config->field_mask);
+	config->field_mask = NULL;
+	free(config->struct_mask);
+	config->struct_mask = NULL;
+}
+
+void free_client_config(struct mmdp_clientside_config* config) {
+	uint32_t i;
+	for (i=0;i<mmdp_capability.mmdp_struct_num;i++) {
+		free(config->field_order[i]);
+		config->field_order[i] = NULL;
+	}
+	free(config->c_to_s_struct_remap);
+	config->c_to_s_struct_remap = NULL;
+	free(config->s_to_c_struct_remap);
+	config->s_to_c_struct_remap= NULL;
 }

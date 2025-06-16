@@ -81,5 +81,7 @@ int main(void) {
 	}
 
 	printf("recieved: %s\n", msg.msg);
+	free(msg.msg);
+	free_server_config(&s_config);
 	return 0;
 }
