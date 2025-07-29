@@ -42,6 +42,7 @@ void swap_bytes_little(void *pv, size_t n) {
 		p[lo] = p[hi];
 		p[hi] = tmp;
 	}
+
 }
 #else
 #error "FATAL: Unable to get endianness of a machine"
@@ -524,8 +525,6 @@ int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capabilit
 			#ifdef DEBUG
 				printf("size is too small while recving struct.net_name\n");
 			#endif
-			/* prevent int underflow */
-			
 			for (struct_ptr = out->mmdp_structs;struct_ptr < curr_struct;struct_ptr++) {
 				free((void*)struct_ptr->net_name);
 				for(j=0;j<struct_ptr->fields_num;j++){
