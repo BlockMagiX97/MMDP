@@ -1,7 +1,7 @@
 BUILD_DIR = ./build
 CC = gcc
-CFLAGS = -O0 --std=c89 -pedantic -r -Wall -Werror -g
-LDFLAGS = 
+CFLAGS = -Ofast --std=c89 -pedantic -r -g -fsanitize=undefined -fanalyzer -Wall -Werror -Wno-unused-result
+LDFLAGS = -fsanitize=undefined -fanalyzer
 
 all: $(BUILD_DIR)/server $(BUILD_DIR)/client
 

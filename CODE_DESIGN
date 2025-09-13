@@ -1,0 +1,11 @@
+- max 4 levels of indentation (should make error handeling easier)
+- divide server and client parts into separate files 
+- do error handeling immidietly
+
+- NO TRUST in network
+- trust programmer that he doesnt fuck up local stuff
+- as much in compile time as possible (if c macros dont permit it do it on startup)
+
+- add macros for custom struct for better readability
+
+- provide serialization, deseralization, sending, recieving and freeing of each struct

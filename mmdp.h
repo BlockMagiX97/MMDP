@@ -94,6 +94,9 @@ struct mmdp_custom_struct {
 	/* parameter2 is pointer to serealized struct by ser_func */
 	/* paramater3 is a maximum size that deser_func can read */
 	const void* (*deser_func)(void*, const void*, uint32_t);
+	/* should free buffers allocated inside structure */
+	/* if no frees are necessary set to NULL */
+	void (*free_func)(void*);
 };
 
 struct mmdp_capability{
@@ -125,7 +128,7 @@ extern uint32_t hard_limit_post_conn;
 
 
 int generate_capability(uint32_t c_struct_num, struct mmdp_custom_struct* c_structs);
-void* serialize_capability(uint32_t* size_out);
+void* serialize_capability(uint32_t* size_out, struct mmdp_capability *cap);
 int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capability* out);
 int create_clientside_config(const struct mmdp_capability* srv_cap, struct mmdp_clientside_config* out);
 void* convert_clientside_to_serealized_serverside(const struct mmdp_clientside_config *cconfig, uint32_t* out_size);
@@ -136,6 +139,7 @@ void print_capability(struct mmdp_capability* mmdp_capability);
 uint32_t sizeof_ser_struct_server(struct mmdp_serverside_config* config, uint32_t id, const void* src);
 void* ser_struct_server(struct mmdp_serverside_config* config, uint32_t id, void* dest, const void* src);
 const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t id, void* dest, const void* src, uint32_t max_size);
+void free_struct_server(struct mmdp_serverside_config *config, uint32_t id, void *struc);
 
 uint32_t sizeof_ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, const void* src);
 void* ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, void* dest, const void* src);

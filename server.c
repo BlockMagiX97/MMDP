@@ -67,8 +67,7 @@ int main(void) {
 	printf("send: ");
 	fflush(stdout);
 
-	fgets(buffer, 256, stdin);
-	msg.msg = buffer; 
+	msg.msg = fgets(buffer, 256, stdin);
 	msg.msg_len = strlen(msg.msg);
 	if (send_struct_server(&s_config, MMDP_msg_struct, new_socket, &msg, NULL) != 0) {
 		printf("Never gonna give you up\n");
