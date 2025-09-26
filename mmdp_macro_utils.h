@@ -30,8 +30,9 @@
 	macro_count=0; \
 	what(_COUNT_##arg_count, arg1 )
 
-/* return 0 on false, 1 on true */
+/* return 0 on false, 1 on true 
+ * flag is a bitmask with only one bit set */
 #define IS_FLAG_ACTIVE(X, FLAG) \
-	(((X) & (FLAG)) != 0 ? 1:0)
+	(((X) & (FLAG)) == 1)
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))

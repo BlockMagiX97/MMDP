@@ -5,15 +5,18 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <sys/types.h>
 #include "mmdp_macro_utils.h"
 
 #include "mmdp_config.h"
 #include "mmdp_struct_decl.h"
 
-
-
-
-
+#define MMDP_CUSTOM_FUNC_DECL(_, __, ___, ____, sizeof_func, ser_func, deser_func, free_func) \
+	uint32_t sizeof_func(const void *); \
+	void *ser_func(void *, const void *); \
+	const void *deser_func(void *, const void *, uint32_t); \
+	void free_func(void *);
+MMDP_CUSTOM_STRUCTS(MMDP_CUSTOM_FUNC_DECL)
 
 typedef uint8_t mmdp_struct_flags;
 enum _mmdp_struct_flags {
@@ -24,7 +27,8 @@ typedef uint8_t mmdp_field_flags;
 enum _mmdp_field_flags {
 	MMDP_FIELD_IS_ESSENTIAL=1
 };
-/* don't change for backward compatibility */
+
+/* don't reorder */
 typedef uint8_t mmdp_field_type;
 enum _mmdp_field_type {
 	MMDP_NORMAL=0,
@@ -41,29 +45,23 @@ struct mmdp_field {
 	union {
 		struct {
 			uint32_t size;
-			const char* _name;
 		} normal;
 		struct {
 			uint32_t id;
-			const char* _name;
 		} struc;
 		struct {
 			uint32_t size;
 			uint32_t depends_id;
-			const char* _depends_name;
 		} array;
 		struct {
 			/* sizeof the struct */
 			uint32_t id;
-			const char* _name;
 			uint32_t depends_id;
-			const char* _depends_name;
 		} struct_array;
 	} body;
 };
 
 struct mmdp_struct {
-	const char* _real_name;
 	/* sizeof this struct */
 	uint32_t _size;
 
@@ -75,8 +73,6 @@ struct mmdp_struct {
 };
 
 struct mmdp_custom_struct {
-	/* real name (struct ${_real_name}). it is used so that library defined structs can interact with it. is NOT sent over the network */
-	const char* _real_name;
 	/* sizeof this struct */
 	uint32_t _size;
 
@@ -107,61 +103,18 @@ struct mmdp_capability{
 	struct mmdp_custom_struct* custom_structs;
 };
 
-struct mmdp_serverside_config {
-	uint8_t* struct_mask;
-	uint8_t** field_mask;
-};
-struct mmdp_clientside_config {
-	uint32_t* c_to_s_struct_remap;
-	uint32_t** field_order;
-
-	uint32_t s_mmdp_struct_num;
-	uint32_t s_custom_struct_num;
-	/* has size of max_s_struct_id * 4 */
-	uint32_t* s_to_c_struct_remap;
-};
-
-
 extern struct mmdp_capability mmdp_capability;
 extern uint32_t hard_limit_pre_conn;
 extern uint32_t hard_limit_post_conn;
 
-
-int generate_capability(uint32_t c_struct_num, struct mmdp_custom_struct* c_structs);
-void* serialize_capability(uint32_t* size_out, struct mmdp_capability *cap);
-int deserialize_capability(const void* buf, uint32_t size, struct mmdp_capability* out);
-int create_clientside_config(const struct mmdp_capability* srv_cap, struct mmdp_clientside_config* out);
-void* convert_clientside_to_serealized_serverside(const struct mmdp_clientside_config *cconfig, uint32_t* out_size);
-int serverside_from_ser(struct mmdp_serverside_config* sconfig, void* serialized_sconfig, uint32_t max_size);
-
+void swap_bytes_little(void *pv, size_t n);
+ssize_t mmdp_read(int fd, void *buf, size_t count, void *read_context);
+ssize_t mmdp_write(int fd, void *buf, size_t count, void *write_context);
+	
+/* free the capability received over the network */
+void free_capability_heap(struct mmdp_capability *cap);
 void print_capability(struct mmdp_capability* mmdp_capability);
-
-uint32_t sizeof_ser_struct_server(struct mmdp_serverside_config* config, uint32_t id, const void* src);
-void* ser_struct_server(struct mmdp_serverside_config* config, uint32_t id, void* dest, const void* src);
-const void* deser_struct_server(struct mmdp_serverside_config* config, uint32_t id, void* dest, const void* src, uint32_t max_size);
-void free_struct_server(struct mmdp_serverside_config *config, uint32_t id, void *struc);
-
-uint32_t sizeof_ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, const void* src);
-void* ser_struct_client(struct mmdp_clientside_config* config, uint32_t id, void* dest, const void* src);
-const void* deser_struct_client(struct mmdp_clientside_config* config, uint32_t id, void* dest, const void* src, uint32_t max_size);
-
-
-int send_struct_server(struct mmdp_serverside_config* config, uint32_t id, uint32_t fd, const void* src, void* write_context);
-int recv_struct_server(struct mmdp_serverside_config* config, uint32_t id, uint32_t fd, void* dest, void* read_context);
-void* recv_struct_server_any(struct mmdp_serverside_config* config, uint32_t* out_id, uint32_t fd, void* read_context);
-
-int send_struct_client(struct mmdp_clientside_config* config, uint32_t id, uint32_t fd, const void* src, void* write_context);
-int recv_struct_client(struct mmdp_clientside_config* config, uint32_t id, uint32_t fd, void* dest, void* read_context);
-void* recv_struct_client_any(struct mmdp_clientside_config* config, uint32_t* out_id, uint32_t fd, void* read_context);
-
-
-
-int init_connection_config_server(int fd, struct mmdp_serverside_config* conf_dest, void* write_context, void* read_context);
-int init_connection_config_client(int fd, struct mmdp_clientside_config* conf_dest, void* write_context, void* read_context);
-
 /* is NOT thread-safe */
-int init_mmdp_lib(uint32_t c_struct_num, struct mmdp_custom_struct* c_structs, int is_server);
+int init_mmdp_lib();
 
-void free_server_config(struct mmdp_serverside_config* config);
-void free_client_config(struct mmdp_clientside_config* config);
 #endif
