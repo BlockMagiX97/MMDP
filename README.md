@@ -6,19 +6,17 @@ maximaly mininal dynamic protocol
 - serialization 
 - array support (only those defined in MMDP macros)
 - custom type support (types defined elsewhere)
-- ajustable limits to memory alocations 
+- essential structs and fields
 
 ## TODO
-- add checks for essentiality
-- add not-prefered fields (are sent only if client or server require them)
-
-- add one-of-two fields (only one of the fields is required (useful for compatibility layers))
-(probably can be implemented using not-prefered fields)
-
-- add checks for support for fields and structs (dont trust the client)
 - add a way for program to check if field or struct is supported
 
+- add ajustable limits to memory alocations 
+
+- add not-prefered fields (are sent only if client or server require them) (are only recomendation from the server)
+
 - remove all memory leaks (should be done)
+- refactor and improve the code
 
 ## Send fields conditionaly
 only 2 types of fields can be sent conditionaly. Other types are always sent.

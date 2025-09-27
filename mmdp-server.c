@@ -313,6 +313,14 @@ int serverside_from_ser(struct mmdp_server_config *sconfig, void *serialized_sco
 			ret = -1;
 			goto fail_field_mask_complete;
 		}
+		/* there must be at least one field inside every struct */
+		if (field_num < 1) {
+#ifdef DEBUG
+			printf("MMDP: field_num is too small\n");
+#endif
+			ret = -1;
+			goto fail_field_mask_complete;
+		}
 		for (j = 0; j < field_num; j++) {
 			if (max_size < 4) {
 #ifdef DEBUG
@@ -339,6 +347,32 @@ int serverside_from_ser(struct mmdp_server_config *sconfig, void *serialized_sco
 				goto fail_field_mask_complete;
 			}
 			sconfig->field_mask[id][field_id] = 0xff;
+		}
+	}
+	/* check for essentiality */
+	/* invalid:	if any essential field is inactive inside active struct
+	 * 		if any essential struct is inactive */
+	for (i = 0; i < mmdp_capability.mmdp_struct_num; i++) {
+		if (sconfig->struct_mask[i] == 0xff) {
+			for (j = 0; j < mmdp_capability.mmdp_structs[i].fields_num; j++) {
+				if (IS_FLAG_ACTIVE(mmdp_capability.mmdp_structs[i].fields[j].flags,
+						   MMDP_FIELD_IS_ESSENTIAL) &&
+				    sconfig->field_mask[i][j] == 0) {
+#ifdef DEBUG
+					printf("MMDP: field essentiality failed\n");
+#endif
+					ret = -1;
+					goto fail_field_mask_complete;
+				}
+			}
+		} else {
+			if (IS_FLAG_ACTIVE(mmdp_capability.mmdp_structs[i].flags, MMDP_IS_ESSENTIAL)) {
+#ifdef DEBUG
+				printf("MMDP: struct essentiality failed\n");
+#endif
+				ret = -1;
+				goto fail_field_mask_complete;
+			}
 		}
 	}
 	ret = 0;
