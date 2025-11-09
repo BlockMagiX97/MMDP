@@ -68,13 +68,13 @@ int main() {
 		close(sock);
 		return 1;
 	}
-	if (init_connection_config_client(sock, &config, NULL, NULL) != 0) {
+	if (init_connection_config_client(&config, &sock, &sock) != 0) {
 		printf("Unable to init connection\n");
 		return 0;
 	}
-	recv_struct_client(&config, MMDP_time_t, sock, &time_recv, NULL);
+	recv_struct_client(&config, MMDP_time_t, &time_recv, &sock);
 	printf("time: %lx\n", time_recv);
-	recv_struct_client(&config, MMDP_struct_a, sock, &a, NULL);
+	recv_struct_client(&config, MMDP_struct_a, &a, &sock);
 	print_struct_a(&a);
 
 	return 0;

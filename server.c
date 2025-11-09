@@ -80,7 +80,7 @@ int main(void) {
 	}
 
 	/* server */
-	if (init_connection_config_server(new_socket, &s_config, NULL, NULL) != 0) {
+	if (init_connection_config_server(&s_config, &new_socket, &new_socket) != 0) {
 		printf("Unable to init connection\n");
 		return 0;
 	}
@@ -93,9 +93,9 @@ int main(void) {
 	a.time = &time_send;
 	time_send = time(NULL);
 	printf("time: %lx\n", time_send);
-	send_struct_server(&s_config, MMDP_time_t, new_socket, &time_send, NULL);
+	send_struct_server(&s_config, MMDP_time_t, &time_send, &new_socket);
 	printf("time: %lx\n", time_send);
-	send_struct_server(&s_config, MMDP_struct_a, new_socket, &a, NULL);
+	send_struct_server(&s_config, MMDP_struct_a, &a, &new_socket);
 	
 
 	printf("SUCCESS\n");

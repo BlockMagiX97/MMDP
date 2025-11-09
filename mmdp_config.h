@@ -4,7 +4,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "mmdp_macro_utils.h"
 	/* struct_name, is_essential, net_id */
 #define MMDP_STRUCTS(_F) \
 	_F(struct_a, 1           , "struct_a") \

@@ -901,7 +901,7 @@ void free_struct_server(struct mmdp_server_config *config, uint32_t id, void *st
 		mmdp_capability.custom_structs[id - mmdp_capability.mmdp_struct_num].free_func(struc);
 	}
 }
-int send_struct_server(struct mmdp_server_config *config, uint32_t id, uint32_t fd, const void *src,
+int send_struct_server(struct mmdp_server_config *config, uint32_t id, const void *src,
 		       void *write_context) {
 	uint32_t size;
 	void *packet;
@@ -931,7 +931,7 @@ int send_struct_server(struct mmdp_server_config *config, uint32_t id, uint32_t 
 		free(packet);
 		return -1;
 	}
-	if (mmdp_write(fd, packet, size, write_context) != 0) {
+	if (mmdp_write(packet, size, write_context) != 0) {
 		free(packet);
 		return -1;
 	}
@@ -940,7 +940,7 @@ int send_struct_server(struct mmdp_server_config *config, uint32_t id, uint32_t 
 	return 0;
 }
 /* even on fail (when id is invalid) it reads at least 8 bytes from fd */
-int recv_struct_server(struct mmdp_server_config *config, uint32_t id, uint32_t fd, void *dest, void *read_context) {
+int recv_struct_server(struct mmdp_server_config *config, uint32_t id, void *dest, void *read_context) {
 	uint8_t data[8];
 	uint32_t packet_id;
 	uint32_t size;
@@ -951,7 +951,7 @@ int recv_struct_server(struct mmdp_server_config *config, uint32_t id, uint32_t 
 #endif
 		return -1;
 	}
-	if (mmdp_read(fd, data, 8, read_context) != 0) {
+	if (mmdp_read(data, 8, read_context) != 0) {
 		perror("mmdp_read failed");
 		return -1;
 	}
@@ -973,7 +973,7 @@ int recv_struct_server(struct mmdp_server_config *config, uint32_t id, uint32_t 
 		perror("malloc");
 		return -1;
 	}
-	if (mmdp_read(fd, ser_struct_buffer, size, read_context) != 0) {
+	if (mmdp_read(ser_struct_buffer, size, read_context) != 0) {
 		perror("mmdp_read failed");
 		free(ser_struct_buffer);
 		return -1;
@@ -989,14 +989,14 @@ int recv_struct_server(struct mmdp_server_config *config, uint32_t id, uint32_t 
 	ser_struct_buffer = NULL;
 	return 0;
 }
-void *recv_struct_server_any(struct mmdp_server_config *config, uint32_t *out_id, uint32_t fd, void *read_context) {
+void *recv_struct_server_any(struct mmdp_server_config *config, uint32_t *out_id, void *read_context) {
 	uint8_t data[8];
 	uint32_t id;
 	uint32_t size;
 	void *ser_struct_buffer;
 	void *struct_out;
 	uint32_t struct_size;
-	if (mmdp_read(fd, data, 8, read_context) != 0) {
+	if (mmdp_read(data, 8, read_context) != 0) {
 		perror("mmdp_read failed");
 		return NULL;
 	}
@@ -1029,7 +1029,7 @@ void *recv_struct_server_any(struct mmdp_server_config *config, uint32_t *out_id
 		perror("malloc");
 		return NULL;
 	}
-	if (mmdp_read(fd, ser_struct_buffer, size, read_context) != 0) {
+	if (mmdp_read(ser_struct_buffer, size, read_context) != 0) {
 		perror("mmdp_read failed");
 		free(ser_struct_buffer);
 		return NULL;
@@ -1054,18 +1054,18 @@ void *recv_struct_server_any(struct mmdp_server_config *config, uint32_t *out_id
 	*out_id = id;
 	return struct_out;
 }
-int init_connection_config_server(int fd, struct mmdp_server_config *conf_dest, void *write_context,
+int init_connection_config_server(struct mmdp_server_config *conf_dest, void *write_context,
 				  void *read_context) {
 	uint32_t size;
 	void *ser_serverconfig;
 	if (_mmdp_chache_ser_server_cap == NULL) {
 		_mmdp_chache_ser_server_cap = serialize_capability(&_mmdp_chache_ser_server_cap_size, &mmdp_capability);
 	}
-	if (mmdp_write(fd, _mmdp_chache_ser_server_cap, _mmdp_chache_ser_server_cap_size, write_context) != 0) {
+	if (mmdp_write(_mmdp_chache_ser_server_cap, _mmdp_chache_ser_server_cap_size, write_context) != 0) {
 		printf("MMDP: Unable to write serialized capability\n");
 		return -1;
 	}
-	if (mmdp_read(fd, &size, 4, read_context) != 0) {
+	if (mmdp_read(&size, 4, read_context) != 0) {
 		printf("MMDP: Unable to read serialized serverconfig size\n");
 		return -1;
 	}
@@ -1081,7 +1081,7 @@ int init_connection_config_server(int fd, struct mmdp_server_config *conf_dest, 
 		return -1;
 	}
 	memset(ser_serverconfig, 0, size);
-	if (mmdp_read(fd, ser_serverconfig, size, read_context) != 0) {
+	if (mmdp_read(ser_serverconfig, size, read_context) != 0) {
 		printf("MMDP: Unable to read serialized serverconfig\n");
 		free(ser_serverconfig);
 		return -1;
@@ -1105,4 +1105,13 @@ void free_server_config(struct mmdp_server_config *config) {
 	config->field_mask = NULL;
 	free(config->struct_mask);
 	config->struct_mask = NULL;
+}
+int is_struct_active_server(const struct mmdp_server_config *config, enum mmdp_structs id) {
+	return config->struct_mask[id] != 0;
+}
+int is_field_active_server(const struct mmdp_server_config *config, enum mmdp_structs id, uint32_t field_id) {
+	if (config->struct_mask[id] != 0) {
+		return config->field_mask[id][field_id] != 0;
+	}
+	return 0;
 }

@@ -47,9 +47,10 @@ uint32_t hard_limit_pre_conn = 1024;	     /* 1kB */
 uint32_t hard_limit_post_conn = 1024 * 1024; /* 1MB */
 
 /* wrappers so we can implement TLS */
-ssize_t mmdp_read(int fd, void *buf, size_t count, void *read_context) {
+ssize_t mmdp_read(void *buf, size_t count, void *read_context) {
 	size_t log;
-	if ((log = read(fd, buf, count)) == count) {
+	int *fd = (int*)read_context;
+	if ((log = read(*fd, buf, count)) == count) {
 		printf("mmdp_read count: %lu\n", log);
 		printf("mmdp_read supposed: %lu\n", count);
 		return 0;
@@ -59,9 +60,10 @@ ssize_t mmdp_read(int fd, void *buf, size_t count, void *read_context) {
 	printf("mmdp_read supposed: %lu\n", count);
 	return -1;
 }
-ssize_t mmdp_write(int fd, void *buf, size_t count, void *write_context) {
+ssize_t mmdp_write(void *buf, size_t count, void *write_context) {
 	size_t log;
-	if ((log = write(fd, buf, count)) == count) {
+	int *fd = (int*)write_context;
+	if ((log = write(*fd, buf, count)) == count) {
 		printf("mmdp_write count: %lu\n", log);
 		printf("mmdp_write supposed: %lu\n", count);
 		return 0;

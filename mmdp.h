@@ -6,10 +6,10 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <sys/types.h>
-#include "mmdp_macro_utils.h"
 
 #include "mmdp_config.h"
 #include "mmdp_struct_decl.h"
+#include "mmdp_macro_utils.h"
 
 #define MMDP_CUSTOM_FUNC_DECL(_, __, ___, ____, sizeof_func, ser_func, deser_func, free_func) \
 	uint32_t sizeof_func(const void *); \
@@ -108,8 +108,8 @@ extern uint32_t hard_limit_pre_conn;
 extern uint32_t hard_limit_post_conn;
 
 void swap_bytes_little(void *pv, size_t n);
-ssize_t mmdp_read(int fd, void *buf, size_t count, void *read_context);
-ssize_t mmdp_write(int fd, void *buf, size_t count, void *write_context);
+ssize_t mmdp_read(void *buf, size_t count, void *read_context);
+ssize_t mmdp_write(void *buf, size_t count, void *write_context);
 	
 /* free the capability received over the network */
 void free_capability_heap(struct mmdp_capability *cap);

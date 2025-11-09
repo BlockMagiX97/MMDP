@@ -392,6 +392,23 @@ int create_clientside_config(const struct mmdp_capability *srv_cap, struct mmdp_
 		out->field_order[i] = NULL;
 	}
 
+	size = sizeof(uint8_t *) * mmdp_capability.mmdp_struct_num;
+	out->field_mask = malloc(size);
+	if (out->field_mask == NULL) {
+		perror("malloc");
+		ret = -1;
+		goto fail_field_mask;
+	}
+	for (i = 0; i < mmdp_capability.mmdp_struct_num; i++) {
+		size = sizeof(uint8_t) * mmdp_capability.mmdp_structs[i].fields_num;
+		out->field_mask[i] = malloc(size);
+		if (out->field_mask[i] == NULL) {
+			perror("malloc");
+			ret = -1;
+			goto fail_field_mask_loop;
+		}
+	}
+
 	/* fillout mmdp remaps */
 	for (i = 0; i < mmdp_capability.mmdp_struct_num; i++) {
 		curr_struct = mmdp_capability.mmdp_structs + i;
@@ -440,6 +457,7 @@ int create_clientside_config(const struct mmdp_capability *srv_cap, struct mmdp_
 					continue;
 				}
 				out->field_order[i][order] = k;
+				out->field_mask[i][k] = 0xff;
 				order++;
 				break;
 			}
@@ -531,6 +549,16 @@ fail_remap_mmdp:
 		free(*free_ptr);
 		*free_ptr = NULL;
 	}
+fail_field_mask_complete:
+	i = mmdp_capability.mmdp_struct_num;
+fail_field_mask_loop:
+	for (free_ptr = (void **)(out->field_mask); free_ptr < (void **)(out->field_mask + i); free_ptr++) {
+		free(*free_ptr);
+		*free_ptr = NULL;
+	}
+fail_field_mask:
+	free(out->field_mask);
+	out->field_mask = NULL;
 fail_field_order:
 	free(out->field_order);
 	out->field_order = NULL;
@@ -626,7 +654,7 @@ void *convert_clientside_to_serealized_serverside(const struct mmdp_client_confi
 			continue;
 		}
 		*((uint32_t *)ptr) = htonl(i);
-		ptr+=4;
+		ptr += 4;
 		*((uint32_t *)ptr) = htonl(fields_num[client_id]);
 		ptr += 4;
 		for (j = 0; j < mmdp_capability.mmdp_structs[client_id].fields_num; j++) {
@@ -634,7 +662,7 @@ void *convert_clientside_to_serealized_serverside(const struct mmdp_client_confi
 				break;
 			}
 			*((uint32_t *)ptr) = htonl(j);
-			ptr+=4;
+			ptr += 4;
 		}
 	}
 
@@ -1070,7 +1098,7 @@ mmdp_fail_clean:
 	return NULL;
 }
 
-int send_struct_client(struct mmdp_client_config *config, uint32_t id, uint32_t fd, const void *src,
+int send_struct_client(struct mmdp_client_config *config, uint32_t id, const void *src,
 		       void *write_context) {
 	uint32_t size;
 	void *packet;
@@ -1100,7 +1128,7 @@ int send_struct_client(struct mmdp_client_config *config, uint32_t id, uint32_t 
 		free(packet);
 		return -1;
 	}
-	if (mmdp_write(fd, packet, size, write_context) != 0) {
+	if (mmdp_write(packet, size, write_context) != 0) {
 		free(packet);
 		return -1;
 	}
@@ -1112,7 +1140,7 @@ int send_struct_client(struct mmdp_client_config *config, uint32_t id, uint32_t 
 /* when -2 is returned no bytes are read from fd */
 /* when -3 is returned it read undefined bytes (is recommened to restart
  * communication) */
-int recv_struct_client(struct mmdp_client_config *config, uint32_t id, uint32_t fd, void *dest, void *read_context) {
+int recv_struct_client(struct mmdp_client_config *config, uint32_t id, void *dest, void *read_context) {
 	uint8_t data[8];
 	uint32_t packet_id;
 	uint32_t size;
@@ -1127,7 +1155,7 @@ int recv_struct_client(struct mmdp_client_config *config, uint32_t id, uint32_t 
 #endif
 		return -2;
 	}
-	if (mmdp_read(fd, data, 8, read_context) != 0) {
+	if (mmdp_read(data, 8, read_context) != 0) {
 		perror("mmdp_read failed");
 		return -3;
 	}
@@ -1158,7 +1186,7 @@ int recv_struct_client(struct mmdp_client_config *config, uint32_t id, uint32_t 
 		perror("malloc");
 		return -1;
 	}
-	if (mmdp_read(fd, ser_struct_buffer, size, read_context) != 0) {
+	if (mmdp_read(ser_struct_buffer, size, read_context) != 0) {
 		perror("mmdp_read failed");
 		free(ser_struct_buffer);
 		return -3;
@@ -1183,14 +1211,14 @@ int recv_struct_client(struct mmdp_client_config *config, uint32_t id, uint32_t 
 	ser_struct_buffer = NULL;
 	return 0;
 }
-void *recv_struct_client_any(struct mmdp_client_config *config, uint32_t *out_id, uint32_t fd, void *read_context) {
+void *recv_struct_client_any(struct mmdp_client_config *config, uint32_t *out_id, void *read_context) {
 	uint8_t data[8];
 	uint32_t id;
 	uint32_t size;
 	void *ser_struct_buffer;
 	void *struct_out;
 	uint32_t struct_size;
-	if (mmdp_read(fd, data, 8, read_context) != 0) {
+	if (mmdp_read(data, 8, read_context) != 0) {
 		perror("mmdp_read failed");
 		return NULL;
 	}
@@ -1223,7 +1251,7 @@ void *recv_struct_client_any(struct mmdp_client_config *config, uint32_t *out_id
 		perror("malloc");
 		return NULL;
 	}
-	if (mmdp_read(fd, ser_struct_buffer, size, read_context) != 0) {
+	if (mmdp_read(ser_struct_buffer, size, read_context) != 0) {
 		perror("mmdp_read failed");
 		free(ser_struct_buffer);
 		return NULL;
@@ -1249,7 +1277,7 @@ void *recv_struct_client_any(struct mmdp_client_config *config, uint32_t *out_id
 	return struct_out;
 }
 /* TODO: fix leaks here */
-int init_connection_config_client(int fd, struct mmdp_client_config *conf_dest, void *write_context,
+int init_connection_config_client(struct mmdp_client_config *conf_dest, void *write_context,
 				  void *read_context) {
 	uint32_t size;
 	void *ser_cap_s;
@@ -1257,7 +1285,7 @@ int init_connection_config_client(int fd, struct mmdp_client_config *conf_dest, 
 	uint32_t size_ser_ss_config;
 	void *ser_ss_config;
 
-	if (mmdp_read(fd, &size, 4, read_context) != 0) {
+	if (mmdp_read(&size, 4, read_context) != 0) {
 		printf("MMDP: Unable to read serialized capability size\n");
 		return -1;
 	}
@@ -1272,7 +1300,7 @@ int init_connection_config_client(int fd, struct mmdp_client_config *conf_dest, 
 		perror("malloc");
 		return -1;
 	}
-	if (mmdp_read(fd, ser_cap_s, size, read_context) != 0) {
+	if (mmdp_read(ser_cap_s, size, read_context) != 0) {
 		printf("MMDP: Unable to read serialized capability\n");
 		free(ser_cap_s);
 		return -1;
@@ -1294,7 +1322,7 @@ int init_connection_config_client(int fd, struct mmdp_client_config *conf_dest, 
 		free(ser_cap_s);
 		return -1;
 	}
-	if (mmdp_write(fd, ser_ss_config, size_ser_ss_config, write_context) != 0) {
+	if (mmdp_write(ser_ss_config, size_ser_ss_config, write_context) != 0) {
 		printf("MMDP: Unable to send serialized config\n");
 		free(ser_cap_s);
 		free(ser_ss_config);
@@ -1310,10 +1338,21 @@ void free_client_config(struct mmdp_client_config *config) {
 		free(config->field_order[i]);
 		config->field_order[i] = NULL;
 	}
+	free(config->field_mask);
+	config->field_mask = NULL;
 	free(config->field_order);
 	config->field_order = NULL;
 	free(config->c_to_s_struct_remap);
 	config->c_to_s_struct_remap = NULL;
 	free(config->s_to_c_struct_remap);
 	config->s_to_c_struct_remap = NULL;
+}
+int is_struct_active_client(const struct mmdp_client_config *config, enum mmdp_structs id) {
+	return config->c_to_s_struct_remap[id] != UINT32_MAX;
+}
+int is_field_active_client(const struct mmdp_client_config *config, enum mmdp_structs id, uint32_t field_id) {
+	if (is_struct_active_client(config, id)) {
+		return config->field_mask[id][field_id] == 0xff;
+	}
+	return 0;
 }
