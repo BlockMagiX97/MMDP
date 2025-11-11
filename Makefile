@@ -27,6 +27,8 @@ OBJ_FILES_SERVER := $(patsubst $(SRC_PATH_SERVER)/%.c,$(OBJ_PATH_SERVER)/%.o,$(S
 SRC_FILES_COMMON := $(shell find $(SRC_PATH_COMMON) -name '*.c')
 OBJ_FILES_COMMON := $(patsubst $(SRC_PATH_COMMON)/%.c,$(OBJ_PATH_COMMON)/%.o,$(SRC_FILES_COMMON))
 
+HEADER_FILES := $(shell find $(SRC_PATH) -name '*.h')
+
 all: make-build-dir $(BIN_PATH)/$(CLIENT_BIN_NAME) $(BIN_PATH)/$(SERVER_BIN_NAME)
 
 
@@ -48,13 +50,13 @@ $(BIN_PATH)/$(SERVER_BIN_NAME): $(OBJ_FILES_SERVER) $(OBJ_FILES_COMMON)
 	$(CC) $(CFLAGS) $^ -o $@
 
 
-$(OBJ_PATH_CLIENT)/%.o: $(SRC_PATH_CLIENT)/%.c
+$(OBJ_PATH_CLIENT)/%.o: $(SRC_PATH_CLIENT)/%.c $(HEADER_FILES)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_PATH_SERVER)/%.o: $(SRC_PATH_SERVER)/%.c
+$(OBJ_PATH_SERVER)/%.o: $(SRC_PATH_SERVER)/%.c $(HEADER_FILES)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_PATH_COMMON)/%.o: $(SRC_PATH_COMMON)/%.c
+$(OBJ_PATH_COMMON)/%.o: $(SRC_PATH_COMMON)/%.c $(HEADER_FILES)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 
