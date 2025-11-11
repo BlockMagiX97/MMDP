@@ -1,6 +1,6 @@
 #ifndef MMDP_CLIENT_H
 #define MMDP_CLIENT_H
-#include "mmdp.h"
+#include "common/mmdp.h"
 
 struct mmdp_client_config {
 	uint32_t *c_to_s_struct_remap;

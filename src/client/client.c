@@ -1,5 +1,5 @@
 #include "mmdp-client.h"
-#include "mmdp.h"
+#include "common/mmdp.h"
 #include <errno.h>
 #include <netinet/in.h>
 #include <stdint.h>

@@ -6,10 +6,10 @@
 #include <string.h>
 #include <unistd.h> /* write */
 
-#include "log-helpers.h"
+#include "common/log-helpers.h"
 #include "mmdp-server.h"
-#include "mmdp.h"
-#include "string_helper.h"
+#include "common/mmdp.h"
+#include "common/string_helper.h"
 
 void *_mmdp_chache_ser_server_cap;
 uint32_t _mmdp_chache_ser_server_cap_size;

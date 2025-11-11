@@ -1,6 +1,6 @@
 #ifndef MMDP_SERVER_H
 #define MMDP_SERVER_H
-#include "mmdp.h"
+#include "common/mmdp.h"
 struct mmdp_server_config {
 	uint8_t *struct_mask;
 	uint8_t **field_mask;

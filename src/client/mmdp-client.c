@@ -7,10 +7,10 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "log-helpers.h"
+#include "common/log-helpers.h"
 #include "mmdp-client.h"
-#include "mmdp.h"
-#include "string_helper.h"
+#include "common/mmdp.h"
+#include "common/string_helper.h"
 
 #include <assert.h>
 #include <stddef.h>
