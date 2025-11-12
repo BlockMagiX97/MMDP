@@ -1,40 +1,69 @@
-BUILD_DIR := build
-CC := gcc
-CFLAGS := -Ofast
-LDFLAGS :=
-.PHONY: all clean server client
+# Compiler and flags
+CC = gcc
+CFLAGS_COMMON = -Wall -Wextra -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough -Werror=format-security -I src
+CFLAGS = $(CFLAGS_COMMON) -s -Ofast -D_FORTIFY_SOURCE=3 -D_GLIBCXX_ASSERTIONS -fstrict-flex-arrays=3 -fstack-clash-protection -fstack-protector-strong -Wl,-z,nodlopen -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -Wl,--as-needed -Wl,--no-copy-dt-needed-entries -fPIE -pie -fcf-protection=full -fstack-protector -fstack-protector-all -fstack-protector-strong
+CFLAGS_DEBUG = $(CFLAGS_COMMON) -ggdb
+DEBUG_ASANITIZE = $(CFLAGS_DEBUG) -fsanitize=address -fno-omit-frame-pointer
 
-# top level
-all: server client
-server: $(BUILD_DIR)/server
-client: $(BUILD_DIR)/client
-clean:
-	rm build/*
+SRC_PATH := src
+SRC_PATH_CLIENT := $(SRC_PATH)/client
+SRC_PATH_SERVER := $(SRC_PATH)/server
+SRC_PATH_COMMON := $(SRC_PATH)/common
+OBJ_PATH := build/obj
+OBJ_PATH_CLIENT := $(OBJ_PATH)/client
+OBJ_PATH_SERVER := $(OBJ_PATH)/server
+OBJ_PATH_COMMON := $(OBJ_PATH)/common
+BIN_PATH := build/bin
+SERVER_BIN_NAME := server
+CLIENT_BIN_NAME := client
 
-# dependencies for library header files here
-mmdp_struct_decl.h: mmdp_macro_utils.h
-mmdp.h: mmdp_config.h mmdp_macro_utils.h mmdp_struct_decl.h
-mmdp-server.h: mmdp.h
-mmdp-client.h: mmdp.h
 
-# dependencies for library source files here
-log-helpers.c: log-helpers.h
-string_helper.c: string_helper.h
-mmdp-client.c: mmdp-client.h log-helpers.h mmdp.h string_helper.h
-mmdp-server.c: mmdp-server.h log-helpers.h mmdp.h string_helper.h
-mmdp.c: mmdp.h string_helper.h log-helpers.h
+SRC_FILES_CLIENT := $(shell find $(SRC_PATH_CLIENT) -name '*.c')
+OBJ_FILES_CLIENT := $(patsubst $(SRC_PATH_CLIENT)/%.c,$(OBJ_PATH_CLIENT)/%.o,$(SRC_FILES_CLIENT))
 
-# dependencies for example user apps
-client.c: mmdp.h mmdp-client.h
-server.c: mmdp.h mmdp-server.h
+SRC_FILES_SERVER := $(shell find $(SRC_PATH_SERVER) -name '*.c')
+OBJ_FILES_SERVER := $(patsubst $(SRC_PATH_SERVER)/%.c,$(OBJ_PATH_SERVER)/%.o,$(SRC_FILES_SERVER))
 
-# build the object files
-$(BUILD_DIR)/%.o: %.c
+SRC_FILES_COMMON := $(shell find $(SRC_PATH_COMMON) -name '*.c')
+OBJ_FILES_COMMON := $(patsubst $(SRC_PATH_COMMON)/%.c,$(OBJ_PATH_COMMON)/%.o,$(SRC_FILES_COMMON))
+
+HEADER_FILES := $(shell find $(SRC_PATH) -name '*.h')
+
+all: make-build-dir $(BIN_PATH)/$(CLIENT_BIN_NAME) $(BIN_PATH)/$(SERVER_BIN_NAME)
+
+
+debug: CFLAGS = $(CFLAGS_DEBUG)
+debug: make-build-dir $(BIN_PATH)/$(CLIENT_BIN_NAME) $(BIN_PATH)/$(SERVER_BIN_NAME)
+
+asan: CFLAGS = $(DEBUG_ASANITIZE)
+asan: make-build-dir $(BIN_PATH)/$(CLIENT_BIN_NAME) $(BIN_PATH)/$(SERVER_BIN_NAME)
+
+
+make-build-dir:
+	mkdir -p $(OBJ_PATH_CLIENT) $(OBJ_PATH_SERVER) $(OBJ_PATH_COMMON) $(BIN_PATH)
+
+
+$(BIN_PATH)/$(CLIENT_BIN_NAME): $(OBJ_FILES_CLIENT) $(OBJ_FILES_COMMON)
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(BIN_PATH)/$(SERVER_BIN_NAME): $(OBJ_FILES_SERVER) $(OBJ_FILES_COMMON)
+	$(CC) $(CFLAGS) $^ -o $@
+
+
+$(OBJ_PATH_CLIENT)/%.o: $(SRC_PATH_CLIENT)/%.c $(HEADER_FILES)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# create example executables
-$(BUILD_DIR)/client: $(BUILD_DIR)/client.o $(BUILD_DIR)/mmdp.o $(BUILD_DIR)/mmdp-client.o $(BUILD_DIR)/log-helpers.o $(BUILD_DIR)/string_helper.o
-	$(CC) $(LDFLAGS) -o $@ $^ 
-$(BUILD_DIR)/server: $(BUILD_DIR)/server.o $(BUILD_DIR)/mmdp.o $(BUILD_DIR)/mmdp-server.o $(BUILD_DIR)/log-helpers.o $(BUILD_DIR)/string_helper.o
-	$(CC) $(LDFLAGS) -o $@ $^ 
+$(OBJ_PATH_SERVER)/%.o: $(SRC_PATH_SERVER)/%.c $(HEADER_FILES)
+	$(CC) $(CFLAGS) -c $< -o $@
 
+$(OBJ_PATH_COMMON)/%.o: $(SRC_PATH_COMMON)/%.c $(HEADER_FILES)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+
+install:
+	@install -vpm 755 -o root -g root $(BIN_PATH)/$(CLIENT_BIN_NAME) /usr/bin/
+
+clean:
+	rm -fr build
+
+.PHONY: all clean install debug asan

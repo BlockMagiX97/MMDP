@@ -1,4 +1,4 @@
-#include "mmdp.h"
+#include "common/mmdp.h"
 #include "mmdp-server.h"
 #include <stdio.h>
 #include <stdlib.h>
