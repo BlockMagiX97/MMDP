@@ -10,7 +10,8 @@
 /* assert */
 #include <assert.h>
 
-#include "mmdp.h"
+#include <mmdp_macro_utils.h>
+#include <mmdp.h>
 #include "string_helper.h"
 #include "log-helpers.h"
 
