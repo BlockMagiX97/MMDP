@@ -6,10 +6,10 @@
 #include <string.h>
 #include <unistd.h> /* write */
 
-#include "common/log-helpers.h"
-#include "mmdp-server.h"
-#include "common/mmdp.h"
-#include "common/string_helper.h"
+#include <common/string_helper.h>
+#include <common/log-helpers.h>
+#include <common/mmdp.h>
+#include <server/mmdp-server.h>
 
 void *_mmdp_chache_ser_server_cap;
 uint32_t _mmdp_chache_ser_server_cap_size;
@@ -851,6 +851,7 @@ void free_struct_server(struct mmdp_server_config *config, uint32_t id, void *st
 						   *((void **)(((uint8_t *)struc) + curr_field->offset)));
 				free(*((void **)(((uint8_t *)struc) + curr_field->offset)));
 				*((void **)(((uint8_t *)struc) + curr_field->offset)) = NULL;
+				break;
 			case MMDP_ARRAY:
 				nmemb_array =
 				    *((uint32_t *)(((uint8_t *)struc) +

@@ -1,5 +1,5 @@
-#include "common/mmdp.h"
-#include "mmdp-server.h"
+#include <common/mmdp.h>
+#include <server/mmdp-server.h>
 #include <stdio.h>
 #include <stdlib.h>
 /* perror and errno */

@@ -1,4 +1,5 @@
 /* c89 is stupid with not allowing empty macro arguments, so i need to exploit macro ordering to make it valid c89 */
+
 #define MMDP_EMPTY
 
 #define _COUNT_0() \

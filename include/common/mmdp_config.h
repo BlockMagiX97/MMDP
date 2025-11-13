@@ -1,9 +1,9 @@
 #ifndef MMDP_CONFIG_H
 #define MMDP_CONFIG_H
 
-
 #include <stdint.h>
 #include <stddef.h>
+
 	/* struct_name, is_essential, net_id */
 #define MMDP_STRUCTS(_F) \
 	_F(struct_a, 1           , "struct_a") \

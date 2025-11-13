@@ -1,5 +1,6 @@
 build/
 log/
 .ccls-cache/
+.ccls
 .cache
 compile_commands.json

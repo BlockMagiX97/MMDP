@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
-#include "log-helpers.h"
+#include <common/log-helpers.h>
 
 void print_b8(uint8_t num) {
 	int i;

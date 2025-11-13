@@ -10,10 +10,10 @@
 /* assert */
 #include <assert.h>
 
-#include <mmdp_macro_utils.h>
-#include <mmdp.h>
-#include "string_helper.h"
-#include "log-helpers.h"
+#include <common/mmdp_macro_utils.h>
+#include <common/mmdp.h>
+#include <common/string_helper.h>
+#include <common/log-helpers.h>
 
 
 #if defined(__BYTE_ORDER) && __BYTE_ORDER == __BIG_ENDIAN || defined(__BIG_ENDIAN__) || defined(__ARMEB__) ||          \

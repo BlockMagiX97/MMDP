@@ -46,20 +46,23 @@ make-build-dir:
 	mkdir -p $(OBJ_PATH_CLIENT) $(OBJ_PATH_SERVER) $(OBJ_PATH_COMMON) $(BIN_PATH) $(DEPENDS_PATH_CLIENT) $(DEPENDS_PATH_SERVER) $(DEPENDS_PATH_COMMON)
 
 $(DEPENDS_PATH_CLIENT)/%.d: $(SRC_PATH_CLIENT)/%.c
+	mkdir -p $(OBJ_PATH_CLIENT) $(OBJ_PATH_SERVER) $(OBJ_PATH_COMMON) $(BIN_PATH) $(DEPENDS_PATH_CLIENT) $(DEPENDS_PATH_SERVER) $(DEPENDS_PATH_COMMON)
 	@set -e; rm -f $@; \
-	$(CC) -MM $(CFLAGS) -I $(patsubst $(SRC_PATH)/%,$(INCLUDE_PATH)/%,$(dir $<)) $< > $@.$$$$; \
+	$(CC) -E -MM $(CFLAGS) -I $(patsubst $(SRC_PATH)/%,$(INCLUDE_PATH)/%,$(dir $<)) $< -MT $(OBJ_PATH_CLIENT)/$(basename $(notdir $<)).o > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 $(DEPENDS_PATH_SERVER)/%.d: $(SRC_PATH_SERVER)/%.c
+	mkdir -p $(OBJ_PATH_CLIENT) $(OBJ_PATH_SERVER) $(OBJ_PATH_COMMON) $(BIN_PATH) $(DEPENDS_PATH_CLIENT) $(DEPENDS_PATH_SERVER) $(DEPENDS_PATH_COMMON)
 	@set -e; rm -f $@; \
-	$(CC) -MM $(CFLAGS) -I $(patsubst $(SRC_PATH)/%,$(INCLUDE_PATH)/%,$(dir $<)) $< > $@.$$$$; \
+	$(CC) -E -MM $(CFLAGS) -I $(patsubst $(SRC_PATH)/%,$(INCLUDE_PATH)/%,$(dir $<)) $< -MT $(OBJ_PATH_SERVER)/$(basename $(notdir $<)).o > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 $(DEPENDS_PATH_COMMON)/%.d: $(SRC_PATH_COMMON)/%.c
+	mkdir -p $(OBJ_PATH_CLIENT) $(OBJ_PATH_SERVER) $(OBJ_PATH_COMMON) $(BIN_PATH) $(DEPENDS_PATH_CLIENT) $(DEPENDS_PATH_SERVER) $(DEPENDS_PATH_COMMON)
 	@set -e; rm -f $@; \
-	$(CC) -MM $(CFLAGS) -I $(patsubst $(SRC_PATH)/%,$(INCLUDE_PATH)/%,$(dir $<)) $< > $@.$$$$; \
+	$(CC) -E -MM $(CFLAGS) -I $(patsubst $(SRC_PATH)/%,$(INCLUDE_PATH)/%,$(dir $<)) $< -MT $(OBJ_PATH_COMMON)/$(basename $(notdir $<)).o > $@.$$$$; \
 	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
